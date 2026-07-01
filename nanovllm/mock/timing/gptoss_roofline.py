@@ -1,16 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
-import sys
-
 from nanovllm.mock.timing.backends import AFDStageDurations
 from nanovllm.mock.timing.ac_model import cs4_offload as CS4M
 
-_WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
-if str(_WORKSPACE_ROOT) not in sys.path:
-    sys.path.insert(0, str(_WORKSPACE_ROOT))
-
-from analytical_backend.gptoss import (  # noqa: E402
+from analytical_backend.gptoss import (
     ARCHES,
     B200,
     DTYPE_BYTES,
