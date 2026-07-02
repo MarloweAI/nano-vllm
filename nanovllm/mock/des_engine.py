@@ -68,13 +68,14 @@ class DESConfig:
     trace_output: str | None = None
     mock_token_base: int = 1000
     timing_backend: str = "parametric"
+    analytical_profile: str = ""
     analytical_model: str = "openai/gpt-oss-120b"
     analytical_hardware: str = "helios"
     analytical_interconnect: str = ""
     analytical_collective_overhead_us: float | None = None
     analytical_send_recv_overhead_us: float | None = None
     analytical_bandwidth_efficiency: float | None = None
-    analytical_overlap_comm: bool = False
+    analytical_overlap_comm: bool | None = None
     analytical_launch_overhead_us: float | None = None
     analytical_decode_launch_overhead_us: float | None = None
     analytical_graph_launch_overhead_us: float | None = None
@@ -90,7 +91,7 @@ class DESConfig:
     analytical_per_layer_overhead_us: float | None = None
     analytical_prefill_per_layer_overhead_us: float | None = None
     analytical_kernel_floor_multiplier: float | None = None
-    analytical_tp_sharding_beta: float = 1.0
+    analytical_tp_sharding_beta: float | None = None
     roofline_gpu_backend: str = "roofline"
     roofline_tp_g: int = 1
     attention_groups: int = 1
@@ -133,7 +134,7 @@ class DESConfig:
         ):
             assert value is None or value >= 0
         assert self.analytical_bandwidth_efficiency is None or self.analytical_bandwidth_efficiency > 0
-        assert self.analytical_tp_sharding_beta > 0
+        assert self.analytical_tp_sharding_beta is None or self.analytical_tp_sharding_beta > 0
         assert self.des_max_batch_size > 0
 
 

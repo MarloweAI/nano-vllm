@@ -43,13 +43,14 @@ class Config:
     cs_rest_resources: int = 1
     cs_to_gpu_link_resources: int = 1
     timing_backend: str = "parametric"
+    analytical_profile: str = ""
     analytical_model: str = "openai/gpt-oss-120b"
     analytical_hardware: str = "helios"
     analytical_interconnect: str = ""
     analytical_collective_overhead_us: float | None = None
     analytical_send_recv_overhead_us: float | None = None
     analytical_bandwidth_efficiency: float | None = None
-    analytical_overlap_comm: bool = False
+    analytical_overlap_comm: bool | None = None
     analytical_launch_overhead_us: float | None = None
     analytical_decode_launch_overhead_us: float | None = None
     analytical_graph_launch_overhead_us: float | None = None
@@ -65,7 +66,7 @@ class Config:
     analytical_per_layer_overhead_us: float | None = None
     analytical_prefill_per_layer_overhead_us: float | None = None
     analytical_kernel_floor_multiplier: float | None = None
-    analytical_tp_sharding_beta: float = 1.0
+    analytical_tp_sharding_beta: float | None = None
     roofline_gpu_backend: str = "roofline"
     roofline_tp_g: int = 1
     attention_groups: int = 1
@@ -114,7 +115,7 @@ class Config:
             ):
                 assert value is None or value >= 0
             assert self.analytical_bandwidth_efficiency is None or self.analytical_bandwidth_efficiency > 0
-            assert self.analytical_tp_sharding_beta > 0
+            assert self.analytical_tp_sharding_beta is None or self.analytical_tp_sharding_beta > 0
             if self.mock_kv_capacity_tokens is not None:
                 self.num_kvcache_blocks = max(1, ceil(self.mock_kv_capacity_tokens / self.kvcache_block_size))
             elif self.num_kvcache_blocks == -1:

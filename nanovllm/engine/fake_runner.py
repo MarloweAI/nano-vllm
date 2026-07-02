@@ -242,6 +242,7 @@ class FakeDESRunner(FakeColocatedRunner):
             mock_kv_capacity_tokens=self.config.num_kvcache_blocks * self.config.kvcache_block_size,
             mock_token_base=self.config.mock_token_base,
             timing_backend=self.config.timing_backend,
+            analytical_profile=self.config.analytical_profile,
             analytical_model=self.config.analytical_model,
             analytical_hardware=self.config.analytical_hardware,
             analytical_interconnect=self.config.analytical_interconnect,

@@ -1,12 +1,25 @@
+import argparse
+
+
 def add_timing_backend_args(parser):
     parser.add_argument("--timing-backend", choices=["parametric", "analytical"], default="parametric")
+    parser.add_argument(
+        "--analytical-profile",
+        default="",
+        help="named AnalyticalServingProfile (analytical_backend/profiles/); "
+        "explicit --analytical-* flags override profile values",
+    )
     parser.add_argument("--analytical-model", default="openai/gpt-oss-120b")
     parser.add_argument("--analytical-hardware", default="helios")
     parser.add_argument("--analytical-interconnect", default="")
     parser.add_argument("--analytical-collective-overhead-us", type=float, default=None)
     parser.add_argument("--analytical-send-recv-overhead-us", type=float, default=None)
     parser.add_argument("--analytical-bandwidth-efficiency", type=float, default=None)
-    parser.add_argument("--analytical-overlap-comm", action="store_true")
+    parser.add_argument(
+        "--analytical-overlap-comm",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+    )
     parser.add_argument("--analytical-launch-overhead-us", type=float, default=None)
     parser.add_argument("--analytical-decode-launch-overhead-us", type=float, default=None)
     parser.add_argument("--analytical-graph-launch-overhead-us", type=float, default=None)
@@ -22,7 +35,7 @@ def add_timing_backend_args(parser):
     parser.add_argument("--analytical-per-layer-overhead-us", type=float, default=None)
     parser.add_argument("--analytical-prefill-per-layer-overhead-us", type=float, default=None)
     parser.add_argument("--analytical-kernel-floor-multiplier", type=float, default=None)
-    parser.add_argument("--analytical-tp-sharding-beta", type=float, default=1.0)
+    parser.add_argument("--analytical-tp-sharding-beta", type=float, default=None)
     parser.add_argument("--roofline-gpu-backend", choices=["measured", "roofline"], default="roofline")
     parser.add_argument("--tp-g", "--roofline-tp-g", dest="roofline_tp_g", type=int, default=1)
     parser.add_argument("--attention-groups", type=int, default=1)
@@ -33,6 +46,7 @@ def add_timing_backend_args(parser):
 def timing_backend_kwargs(args):
     return {
         "timing_backend": args.timing_backend,
+        "analytical_profile": args.analytical_profile,
         "analytical_model": args.analytical_model,
         "analytical_hardware": args.analytical_hardware,
         "analytical_interconnect": args.analytical_interconnect,

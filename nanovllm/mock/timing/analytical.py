@@ -3,9 +3,8 @@ from __future__ import annotations
 from nanovllm.mock.timing.backends import AFDStageDurations
 from nanovllm.mock.timing.ac_model import cs4_offload as CS4M
 
-from analytical_backend.api import LayerTimingBreakdown, RooflineCalibration
-from analytical_backend.comm import AnalyticalCommModel, CommSpec
-from analytical_backend.gpu import GpuSpec, get_gpu_spec
+from analytical_backend.calibration import calibration_from_config
+from analytical_backend.gpu import GpuSpec
 from analytical_backend.pareto import (
     gpu_fmha_total as _shared_gpu_fmha_total,
     gpu_only_point as _shared_gpu_only_point,
@@ -14,9 +13,9 @@ from analytical_backend.pareto import (
     stage_times as _shared_stage_times,
     tpot_seconds as _shared_tpot_seconds,
 )
-from analytical_backend.interconnect import get_interconnect_spec
-from analytical_backend.models import Model, load_model
-from analytical_backend.serving import DTYPE_BYTES, build_roofline_backend
+from analytical_backend.models import Model
+from analytical_backend.profiles import load_profile
+from analytical_backend.serving_model import AnalyticalServingModel
 
 _MGPU = None
 
@@ -141,64 +140,43 @@ class AnalyticalTimingBackend:
         self.model_key = getattr(config, "analytical_model", "openai/gpt-oss-120b")
         self.hardware_key = getattr(config, "analytical_hardware", "b200")
         self.interconnect_key = getattr(config, "analytical_interconnect", "")
-        self.collective_overhead_us = getattr(config, "analytical_collective_overhead_us", None)
-        self.send_recv_overhead_us = getattr(config, "analytical_send_recv_overhead_us", None)
-        self.bandwidth_efficiency = getattr(config, "analytical_bandwidth_efficiency", None)
-        self.overlap_comm = bool(getattr(config, "analytical_overlap_comm", False))
-        self.tp_sharding_beta = float(getattr(config, "analytical_tp_sharding_beta", 1.0) or 1.0)
-        self.model = load_model(self.model_key)
-        self.arch = get_gpu_spec(self.hardware_key)
-        self.calibration = self._calibration_from_config(config)
-        self._comm_model = None
-        if self.interconnect_key:
-            interconnect = get_interconnect_spec(self.interconnect_key)
-            if interconnect.device_key != self.arch.key:
-                raise ValueError(
-                    f"interconnect {self.interconnect_key!r} targets {interconnect.device_key!r}, "
-                    f"not hardware {self.arch.key!r}"
+        # All serving-time modeling (profile resolution, calibration, TP comm,
+        # overlap composition) lives in the shared AnalyticalServingModel; this
+        # adapter only maps nano config fields onto it. Explicit analytical_*
+        # knobs override profile values (None = not set).
+        profile_name = getattr(config, "analytical_profile", "") or ""
+        explicit_calibration = calibration_from_config(config, prefix="analytical_")
+        self._serving = AnalyticalServingModel(
+            self.model_key,
+            self.hardware_key,
+            tp=config.roofline_tp_g,
+            interconnect=self.interconnect_key,
+            profile=profile_name or None,
+            calibration=(
+                calibration_from_config(
+                    config,
+                    prefix="analytical_",
+                    base=load_profile(profile_name).calibration,
                 )
-            self._comm_model = AnalyticalCommModel(
-                CommSpec.from_interconnect(
-                    interconnect,
-                    collective_overhead_us=self.collective_overhead_us,
-                    send_recv_overhead_us=self.send_recv_overhead_us,
-                    bandwidth_efficiency=self.bandwidth_efficiency,
-                )
-            )
-        self._shared_backend = build_roofline_backend(
-            self.model,
-            self.arch,
-            config.roofline_tp_g,
-            tp_sharding_beta=self.tp_sharding_beta,
-            calibration=self.calibration,
+                if profile_name
+                else explicit_calibration
+            ),
+            tp_sharding_beta=getattr(config, "analytical_tp_sharding_beta", None),
+            overlap_comm=getattr(config, "analytical_overlap_comm", None),
+            collective_overhead_us=getattr(config, "analytical_collective_overhead_us", None),
+            send_recv_overhead_us=getattr(config, "analytical_send_recv_overhead_us", None),
+            bandwidth_efficiency=getattr(config, "analytical_bandwidth_efficiency", None),
         )
+        self.profile = self._serving.profile
+        self.model = self._serving.model
+        self.arch = self._serving.arch
+        self.calibration = self._serving.calibration
+        self.overlap_comm = self._serving.overlap_comm
+        self.tp_sharding_beta = self._serving.tp_sharding_beta
+        self.collective_overhead_us = self._serving.collective_overhead_us
+        self.send_recv_overhead_us = self._serving.send_recv_overhead_us
+        self.bandwidth_efficiency = self._serving.bandwidth_efficiency
         self._afd_stage_cache: dict[tuple[int, int, str, int, float], AFDStageDurations] = {}
-
-    @staticmethod
-    def _calibration_from_config(config) -> RooflineCalibration:
-        fields = {
-            "analytical_launch_overhead_us": "launch_overhead_us",
-            "analytical_decode_launch_overhead_us": "decode_launch_overhead_us",
-            "analytical_graph_launch_overhead_us": "graph_launch_overhead_us",
-            "analytical_utilization": "utilization",
-            "analytical_hbm_utilization": "hbm_utilization",
-            "analytical_flop_utilization": "flop_utilization",
-            "analytical_attn_hbm_utilization": "attn_hbm_utilization",
-            "analytical_attn_flop_utilization": "attn_flop_utilization",
-            "analytical_prefill_attn_hbm_utilization": "prefill_attn_hbm_utilization",
-            "analytical_moe_grouped_gemm_efficiency": "moe_grouped_gemm_efficiency",
-            "analytical_attn_proj_eager_overhead_us": "attn_proj_eager_overhead_us",
-            "analytical_moe_grouped_gemm_eager_overhead_us": "moe_grouped_gemm_eager_overhead_us",
-            "analytical_per_layer_overhead_us": "per_layer_overhead_us",
-            "analytical_prefill_per_layer_overhead_us": "prefill_per_layer_overhead_us",
-            "analytical_kernel_floor_multiplier": "kernel_floor_multiplier",
-        }
-        kwargs = {}
-        for config_key, calibration_key in fields.items():
-            value = getattr(config, config_key, None)
-            if value is not None:
-                kwargs[calibration_key] = value
-        return RooflineCalibration(**kwargs)
 
     @property
     def backend(self) -> str:
@@ -206,22 +184,12 @@ class AnalyticalTimingBackend:
 
     def prefill_ms(self, batch_size: int, isl: int) -> float:
         if self.backend == "roofline":
-            compute_ms = self._shared_backend.prefill_step_ms(
-                batch_size=batch_size,
-                seq_len=isl,
-            )
-            layer = self._shared_backend.prefill_layer_breakdown_ms(
-                total_tokens=batch_size * isl,
-                sum_seq_len_sq=batch_size * isl * isl,
-            )
-            return self._with_tp_comm(compute_ms, batch_size * isl, layer_breakdown=layer)
+            return self._serving.prefill_step_ms(batch_size=batch_size, seq_len=isl)
         return self.config.prefill_base_ms + isl * self.config.prefill_ms_per_token * batch_size
 
     def colocated_decode_ms(self, batch_size: int, context_len: int) -> float:
         if self.backend == "roofline":
-            compute_ms = self._shared_backend.decode_step_ms(batch_size, context_len)
-            layer = self._shared_backend.decode_layer_breakdown_ms(batch_size, context_len)
-            return self._with_tp_comm(compute_ms, batch_size, layer_breakdown=layer)
+            return self._serving.decode_step_ms(batch_size, context_len)
         return tpot_seconds(
             self.arch,
             self.model,
@@ -230,40 +198,6 @@ class AnalyticalTimingBackend:
             self.config.roofline_tp_g,
             backend=self.backend,
         ) * 1e3
-
-    def _with_tp_comm(
-        self,
-        compute_ms: float,
-        num_tokens: int,
-        *,
-        layer_breakdown: LayerTimingBreakdown | None = None,
-    ) -> float:
-        comm_per_layer_ms = self._tp_comm_ms_per_layer(num_tokens)
-        comm_ms = 2.0 * self.model.L * comm_per_layer_ms
-        if self.overlap_comm:
-            if layer_breakdown is None:
-                return max(compute_ms, comm_ms)
-            non_layer_ms = max(0.0, compute_ms - self.model.L * layer_breakdown.total_ms)
-            return (
-                non_layer_ms
-                + self.model.L
-                * (
-                    max(layer_breakdown.attention_ms, comm_per_layer_ms)
-                    + max(layer_breakdown.ffn_ms, comm_per_layer_ms)
-                    + layer_breakdown.residual_ms
-                )
-            )
-        return compute_ms + comm_ms
-
-    def _tp_comm_ms(self, num_tokens: int) -> float:
-        return 2.0 * self.model.L * self._tp_comm_ms_per_layer(num_tokens)
-
-    def _tp_comm_ms_per_layer(self, num_tokens: int) -> float:
-        tp_g = self.config.roofline_tp_g
-        if self._comm_model is None or tp_g <= 1 or num_tokens <= 0:
-            return 0.0
-        tensor_bytes = int(num_tokens * self.model.d * DTYPE_BYTES[self.model.act])
-        return self._comm_model.allreduce_ms(tensor_bytes, tp_g, floor=True)
 
     def afd_decode_stages_ms(self, microbatch_size: int, context_len: int) -> AFDStageDurations:
         cache_key = (
@@ -280,7 +214,7 @@ class AnalyticalTimingBackend:
         CS4M.CLOS_LAT_US = self.config.gpu_cs_link_us
         try:
             if self.backend == "roofline":
-                attention_s = self._shared_backend.op_time_ms(
+                attention_s = self._serving.op_time_ms(
                     "attn_decode",
                     num_tokens=microbatch_size,
                     batch_size=microbatch_size,
