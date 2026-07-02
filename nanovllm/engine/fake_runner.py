@@ -245,7 +245,6 @@ class FakeDESRunner(FakeColocatedRunner):
             analytical_model=self.config.analytical_model,
             analytical_hardware=self.config.analytical_hardware,
             analytical_interconnect=self.config.analytical_interconnect,
-            roofline_gpu_arch=self.config.roofline_gpu_arch,
             roofline_gpu_backend=self.config.roofline_gpu_backend,
             roofline_tp_g=self.config.roofline_tp_g,
             attention_groups=self.config.attention_groups,

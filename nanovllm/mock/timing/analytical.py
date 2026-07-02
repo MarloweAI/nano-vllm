@@ -3,39 +3,18 @@ from __future__ import annotations
 from nanovllm.mock.timing.backends import AFDStageDurations
 from nanovllm.mock.timing.ac_model import cs4_offload as CS4M
 
-from analytical_backend.gptoss import (
-    ARCHES,
-    B200,
-    DTYPE_BYTES,
-    GPTOSS,
-    HELIOS,
-    P_MI455X_KW,
-    RUBIN,
-    Arch,
-    Model,
-    all_gather,
-    all_to_all,
-    arch_to_device_spec,
-    attn_layer,
-    experts_active,
-    fmha_time,
-    gemm_time,
+from analytical_backend.gpu import GpuSpec, get_gpu_spec
+from analytical_backend.pareto import (
     gpu_fmha_total as _shared_gpu_fmha_total,
     gpu_only_point as _shared_gpu_only_point,
     hybrid_point as _shared_hybrid_point,
-    layer_split,
-    model_to_model_spec,
-    moe_layer,
     pareto_uplr,
-    pipe_closed,
-    roofline_backend,
     stage_times as _shared_stage_times,
     tpot_seconds as _shared_tpot_seconds,
-    tp_allreduce,
 )
-from analytical_backend.gpu import get_gpu_spec
 from analytical_backend.interconnect import get_interconnect_spec
-from analytical_backend.models import load_model
+from analytical_backend.models import Model, load_model
+from analytical_backend.serving import build_roofline_backend
 
 _MGPU = None
 
@@ -49,7 +28,7 @@ def _mgpu():
     return _MGPU
 
 
-def _measured_layer_times(arch: Arch, batch_size: int, isl: int, tp_g: int) -> tuple[float, float]:
+def _measured_layer_times(arch: GpuSpec, batch_size: int, isl: int, tp_g: int) -> tuple[float, float]:
     return _mgpu().layer_times(arch, batch_size, isl, tp_g)
 
 
@@ -62,7 +41,7 @@ def _cs4_comm_s(batch_size: int) -> float:
 
 
 def tpot_seconds(
-    arch: Arch,
+    arch: GpuSpec,
     m: Model,
     B: int,
     isl: int,
@@ -85,7 +64,7 @@ def tpot_seconds(
     )
 
 
-def gpu_fmha_total(arch: Arch, m: Model, B: int, isl: int, P: int, *, backend: str = "measured") -> float:
+def gpu_fmha_total(arch: GpuSpec, m: Model, B: int, isl: int, P: int, *, backend: str = "measured") -> float:
     return _shared_gpu_fmha_total(
         arch,
         m,
@@ -97,7 +76,7 @@ def gpu_fmha_total(arch: Arch, m: Model, B: int, isl: int, P: int, *, backend: s
     )
 
 
-def stage_times(arch: Arch, m: Model, ck: int, isl: int, tp_g: int, *, backend: str = "measured"):
+def stage_times(arch: GpuSpec, m: Model, ck: int, isl: int, tp_g: int, *, backend: str = "measured"):
     return _shared_stage_times(
         arch,
         m,
@@ -112,7 +91,7 @@ def stage_times(arch: Arch, m: Model, ck: int, isl: int, tp_g: int, *, backend: 
 
 
 def hybrid_point(
-    arch: Arch,
+    arch: GpuSpec,
     m: Model,
     gb: int,
     isl: int,
@@ -138,7 +117,7 @@ def hybrid_point(
     )
 
 
-def gpu_only_point(arch: Arch, m: Model, B: int, isl: int, tp_g: int, *, backend: str = "measured"):
+def gpu_only_point(arch: GpuSpec, m: Model, B: int, isl: int, tp_g: int, *, backend: str = "measured"):
     return _shared_gpu_only_point(
         arch,
         m,
@@ -158,7 +137,7 @@ class AnalyticalTimingBackend:
     def __init__(self, config):
         self.config = config
         self.model_key = getattr(config, "analytical_model", "openai/gpt-oss-120b")
-        self.hardware_key = getattr(config, "analytical_hardware", getattr(config, "roofline_gpu_arch", "b200"))
+        self.hardware_key = getattr(config, "analytical_hardware", "b200")
         self.interconnect_key = getattr(config, "analytical_interconnect", "")
         self.model = load_model(self.model_key)
         self.arch = get_gpu_spec(self.hardware_key)
@@ -169,7 +148,7 @@ class AnalyticalTimingBackend:
                     f"interconnect {self.interconnect_key!r} targets {interconnect.device_key!r}, "
                     f"not hardware {self.arch.key!r}"
                 )
-        self._shared_backend = roofline_backend(self.arch, self.model, config.roofline_tp_g)
+        self._shared_backend = build_roofline_backend(self.model, self.arch, config.roofline_tp_g)
         self._afd_stage_cache: dict[tuple[int, int, str, int, float], AFDStageDurations] = {}
 
     @property
@@ -242,6 +221,3 @@ class AnalyticalTimingBackend:
         )
         self._afd_stage_cache[cache_key] = durations
         return durations
-
-
-GPTOSSRooflineTimingBackend = AnalyticalTimingBackend

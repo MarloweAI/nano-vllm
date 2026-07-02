@@ -3,7 +3,12 @@ import pytest
 from nanovllm.config import Config
 from nanovllm.mock.timing import build_timing_backend
 from nanovllm.mock.timing.ac_model import cs4_offload as CS4M
-from nanovllm.mock.timing.gptoss_roofline import HELIOS, GPTOSS, gpu_only_point, hybrid_point
+from nanovllm.mock.timing.analytical import gpu_only_point, hybrid_point
+from analytical_backend.gpu import get_gpu_spec
+from analytical_backend.models import load_model
+
+HELIOS = get_gpu_spec("helios")
+MODEL = load_model("openai/gpt-oss-120b")
 
 
 def test_parametric_timing_backend_preserves_existing_formulas():
@@ -33,12 +38,12 @@ def test_parametric_timing_backend_preserves_existing_formulas():
     assert stages.cs_to_gpu_link_ms == pytest.approx(0.2)
 
 
-def test_gptoss_roofline_backend_attention_is_monotonic_with_context():
+def test_analytical_backend_attention_is_monotonic_with_context():
     config = Config(
         "__mock__",
         mock_backend=True,
         mock_mode="afd",
-        timing_backend="gptoss_roofline",
+        timing_backend="analytical",
         roofline_gpu_backend="measured",
         roofline_tp_g=1,
     )
@@ -48,7 +53,7 @@ def test_gptoss_roofline_backend_attention_is_monotonic_with_context():
     long = backend.afd_decode_stages_ms(microbatch_size=4, context_len=131072)
 
     assert long.attention_ms > short.attention_ms
-    assert "timing_backend=gptoss_roofline" in short.notes
+    assert "timing_backend=analytical" in short.notes
 
 
 def test_analytical_backend_accepts_shared_amd_hardware_specs():
@@ -70,14 +75,14 @@ def test_analytical_backend_accepts_shared_amd_hardware_specs():
 
 
 def test_gptoss_rawdata_regression_points_match_section5_8k():
-    gpu = gpu_only_point(HELIOS, GPTOSS, B=256, isl=8192, tp_g=1, backend="measured")
+    gpu = gpu_only_point(HELIOS, MODEL, B=256, isl=8192, tp_g=1, backend="measured")
     assert gpu["x"] == pytest_approx_pct(163.7, rel=0.005)
     assert gpu["y"] == pytest_approx_pct(41896.2, rel=0.005)
 
     old_link = CS4M.CLOS_LAT_US
     CS4M.CLOS_LAT_US = 12.0
     try:
-        hybrid = hybrid_point(HELIOS, GPTOSS, gb=256, isl=8192, tp_g=1, a_g=1, ck=128, backend="measured")
+        hybrid = hybrid_point(HELIOS, MODEL, gb=256, isl=8192, tp_g=1, a_g=1, ck=128, backend="measured")
     finally:
         CS4M.CLOS_LAT_US = old_link
     assert hybrid["x"] == pytest_approx_pct(327.8, rel=0.005)
@@ -88,9 +93,9 @@ def test_gptoss_link_latency_changes_interactivity_not_pipeline_filled_throughpu
     old_link = CS4M.CLOS_LAT_US
     try:
         CS4M.CLOS_LAT_US = 4.0
-        fast = hybrid_point(HELIOS, GPTOSS, gb=256, isl=8192, tp_g=1, a_g=1, ck=64, backend="measured")
+        fast = hybrid_point(HELIOS, MODEL, gb=256, isl=8192, tp_g=1, a_g=1, ck=64, backend="measured")
         CS4M.CLOS_LAT_US = 36.0
-        slow = hybrid_point(HELIOS, GPTOSS, gb=256, isl=8192, tp_g=1, a_g=1, ck=64, backend="measured")
+        slow = hybrid_point(HELIOS, MODEL, gb=256, isl=8192, tp_g=1, a_g=1, ck=64, backend="measured")
     finally:
         CS4M.CLOS_LAT_US = old_link
 

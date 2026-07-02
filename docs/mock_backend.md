@@ -648,13 +648,12 @@ AFD     = attention + GPU->CS link + CS rest + CS->GPU link
 `timing_backend="analytical"` adapts the shared `analytical_backend` model and
 hardware specs into the same mock runner contract. The backend models GPU-only
 decode/prefill for colocated mode and GPU FMHA attention, GPU↔CS-4 link, and
-CS-4 non-attention stages for AFD mode. The old `gptoss_roofline` name remains
-as a compatibility alias.
+CS-4 non-attention stages for AFD mode.
 
 Useful flags:
 
 ```bash
---timing-backend parametric|analytical|gptoss_roofline
+--timing-backend parametric|analytical
 --analytical-model openai/gpt-oss-120b
 --analytical-hardware b200|mi355x|mi455x|...
 --analytical-interconnect b200_dgx|mi355x_ubb|mi455x_helios|...
@@ -685,7 +684,9 @@ The standalone DES harness uses the same timing flags:
 ```bash
 python tools/run_des_workload.py \
   --mode afd \
-  --timing-backend gptoss_roofline \
+  --timing-backend analytical \
+  --analytical-model openai/gpt-oss-120b \
+  --analytical-hardware b200 \
   --fixed-isl 8192 \
   --fixed-osl 16 \
   --num-requests 16 \
@@ -698,7 +699,9 @@ The nano-vLLM engine can also use DES timing for scheduled decode batches:
 python tools/run_mock_trace.py \
   --mock-mode afd \
   --mock-runner des \
-  --timing-backend gptoss_roofline \
+  --timing-backend analytical \
+  --analytical-model openai/gpt-oss-120b \
+  --analytical-hardware b200 \
   --isl 8192 \
   --osl 16 \
   --num-requests 16 \

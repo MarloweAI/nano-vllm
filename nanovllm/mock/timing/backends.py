@@ -59,7 +59,7 @@ class ParametricTimingBackend:
 def build_timing_backend(config) -> TimingBackend:
     if config.timing_backend == "parametric":
         return ParametricTimingBackend(config)
-    if config.timing_backend in ("analytical", "gptoss_roofline"):
+    if config.timing_backend == "analytical":
         from nanovllm.mock.timing.analytical import AnalyticalTimingBackend
 
         return AnalyticalTimingBackend(config)

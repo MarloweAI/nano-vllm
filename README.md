@@ -219,8 +219,7 @@ latency formulas. For shared model/hardware roofline studies, use
 `--timing-backend analytical`. It loads model, GPU, and interconnect specs from
 the top-level `analytical_backend` package, then maps those timings onto the
 same mock stages: GPU-only decode for colocated mode, and GPU attention /
-GPU↔CS link / CS rest for AFD mode. The old `gptoss_roofline` name remains as a
-compatibility alias.
+GPU↔CS link / CS rest for AFD mode.
 
 ```bash
 python tools/run_mock_trace.py \
@@ -277,7 +276,9 @@ python tools/run_des_workload.py \
   --mode colocated \
   --des-batch-decode \
   --des-max-batch-size 256 \
-  --timing-backend gptoss_roofline \
+  --timing-backend analytical \
+  --analytical-model openai/gpt-oss-120b \
+  --analytical-hardware b200 \
   --fixed-isl 8192 \
   --fixed-osl 8 \
   --num-requests 256 \

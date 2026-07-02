@@ -49,7 +49,9 @@ In-engine nano-vLLM-DES:
 python tools/run_mock_trace.py \
   --mock-mode afd \
   --mock-runner des \
-  --timing-backend gptoss_roofline \
+  --timing-backend analytical \
+  --analytical-model openai/gpt-oss-120b \
+  --analytical-hardware b200 \
   --num-requests 16 \
   --isl 8192 \
   --osl 8 \
@@ -149,7 +151,9 @@ python tools/run_des_workload.py \
   --mode colocated \
   --des-batch-decode \
   --des-max-batch-size 256 \
-  --timing-backend gptoss_roofline \
+  --timing-backend analytical \
+  --analytical-model openai/gpt-oss-120b \
+  --analytical-hardware b200 \
   --fixed-isl 8192 \
   --fixed-osl 8 \
   --num-requests 256 \

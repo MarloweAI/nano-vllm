@@ -71,8 +71,7 @@ class DESConfig:
     analytical_model: str = "openai/gpt-oss-120b"
     analytical_hardware: str = "helios"
     analytical_interconnect: str = ""
-    roofline_gpu_arch: str = "helios"
-    roofline_gpu_backend: str = "measured"
+    roofline_gpu_backend: str = "roofline"
     roofline_tp_g: int = 1
     attention_groups: int = 1
     chunk_batch: int = 1
@@ -89,9 +88,7 @@ class DESConfig:
         assert self.cs_to_gpu_link_resources > 0
         assert self.mock_block_size > 0
         assert self.mock_kv_capacity_tokens > 0
-        assert self.timing_backend in ("parametric", "analytical", "gptoss_roofline")
-        if self.analytical_hardware == "helios" and self.roofline_gpu_arch != "helios":
-            self.analytical_hardware = self.roofline_gpu_arch
+        assert self.timing_backend in ("parametric", "analytical")
         assert self.roofline_gpu_backend in ("measured", "roofline")
         assert self.roofline_tp_g > 0
         assert self.gpu_cs_link_us >= 0
