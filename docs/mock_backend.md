@@ -645,18 +645,19 @@ decode  = decode_base_ms + decode_ms_per_token * batch_size
 AFD     = attention + GPU->CS link + CS rest + CS->GPU link
 ```
 
-`timing_backend="gptoss_roofline"` adapts the GPT-OSS-120B decode equations
-from the [original analytical model](perf_model.pdf) into the same mock runner
-contract. It is decode-focused: prefill still uses the parametric formula until
-a prefill roofline model is supplied.
-The backend models GPU-only decode for colocated mode and GPU FMHA attention,
-GPU↔CS-4 link, and CS-4 non-attention stages for AFD mode.
+`timing_backend="analytical"` adapts the shared `analytical_backend` model and
+hardware specs into the same mock runner contract. The backend models GPU-only
+decode/prefill for colocated mode and GPU FMHA attention, GPU↔CS-4 link, and
+CS-4 non-attention stages for AFD mode. The old `gptoss_roofline` name remains
+as a compatibility alias.
 
 Useful flags:
 
 ```bash
---timing-backend parametric|gptoss_roofline
---roofline-gpu-arch helios|rubin|b200
+--timing-backend parametric|analytical|gptoss_roofline
+--analytical-model openai/gpt-oss-120b
+--analytical-hardware b200|mi355x|mi455x|...
+--analytical-interconnect b200_dgx|mi355x_ubb|mi455x_helios|...
 --roofline-gpu-backend measured|roofline
 --tp-g 1
 --gpu-cs-link-us 12
@@ -667,7 +668,9 @@ Example:
 ```bash
 python tools/run_mock_trace.py \
   --mock-mode afd \
-  --timing-backend gptoss_roofline \
+  --timing-backend analytical \
+  --analytical-model openai/gpt-oss-120b \
+  --analytical-hardware b200 \
   --roofline-gpu-backend measured \
   --tp-g 1 \
   --gpu-cs-link-us 12 \

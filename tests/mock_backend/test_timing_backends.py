@@ -51,6 +51,24 @@ def test_gptoss_roofline_backend_attention_is_monotonic_with_context():
     assert "timing_backend=gptoss_roofline" in short.notes
 
 
+def test_analytical_backend_accepts_shared_amd_hardware_specs():
+    config = Config(
+        "__mock__",
+        mock_backend=True,
+        mock_mode="colocated",
+        timing_backend="analytical",
+        analytical_model="openai/gpt-oss-120b",
+        analytical_hardware="mi355x",
+        analytical_interconnect="mi355x_ubb",
+        roofline_gpu_backend="roofline",
+        roofline_tp_g=1,
+    )
+    backend = build_timing_backend(config)
+
+    assert backend.prefill_ms(batch_size=1, isl=1024) > 0
+    assert backend.colocated_decode_ms(batch_size=4, context_len=1024) > 0
+
+
 def test_gptoss_rawdata_regression_points_match_section5_8k():
     gpu = gpu_only_point(HELIOS, GPTOSS, B=256, isl=8192, tp_g=1, backend="measured")
     assert gpu["x"] == pytest_approx_pct(163.7, rel=0.005)

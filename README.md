@@ -152,7 +152,9 @@ DES-backed nano-vLLM decode runner:
 python tools/run_mock_trace.py \
   --mock-mode afd \
   --mock-runner des \
-  --timing-backend gptoss_roofline \
+  --timing-backend analytical \
+  --analytical-model openai/gpt-oss-120b \
+  --analytical-hardware b200 \
   --trace-output traces/mock_afd_des_trace.csv \
   --num-requests 16 \
   --isl 8192 \
@@ -210,19 +212,22 @@ python tools/run_mock_workload.py \
 Workload outputs include trace CSV, metrics CSV, summary CSV, and SVG plots for
 TTFT, TBT, throughput, KV usage, and batch size.
 
-### GPT-OSS Timing Backend
+### Analytical Timing Backend
 
 The default timing backend is `parametric`, which preserves the original mock
-latency formulas. For GPT-OSS-120B decode studies, use
-`--timing-backend gptoss_roofline`. It maps the
-[original analytical model](docs/perf_model.pdf) decode equations onto the
+latency formulas. For shared model/hardware roofline studies, use
+`--timing-backend analytical`. It loads model, GPU, and interconnect specs from
+the top-level `analytical_backend` package, then maps those timings onto the
 same mock stages: GPU-only decode for colocated mode, and GPU attention /
-GPU↔CS link / CS rest for AFD mode. Prefill remains parametric.
+GPU↔CS link / CS rest for AFD mode. The old `gptoss_roofline` name remains as a
+compatibility alias.
 
 ```bash
 python tools/run_mock_trace.py \
   --mock-mode afd \
-  --timing-backend gptoss_roofline \
+  --timing-backend analytical \
+  --analytical-model openai/gpt-oss-120b \
+  --analytical-hardware b200 \
   --isl 8192 \
   --osl 8 \
   --trace-output traces/gptoss_afd_trace.csv
