@@ -140,6 +140,8 @@ class AnalyticalTimingBackend:
         self.model_key = getattr(config, "analytical_model", "openai/gpt-oss-120b")
         self.hardware_key = getattr(config, "analytical_hardware", "b200")
         self.interconnect_key = getattr(config, "analytical_interconnect", "")
+        self.collective_overhead_us = getattr(config, "analytical_collective_overhead_us", None)
+        self.send_recv_overhead_us = getattr(config, "analytical_send_recv_overhead_us", None)
         self.model = load_model(self.model_key)
         self.arch = get_gpu_spec(self.hardware_key)
         self._comm_model = None
@@ -150,7 +152,13 @@ class AnalyticalTimingBackend:
                     f"interconnect {self.interconnect_key!r} targets {interconnect.device_key!r}, "
                     f"not hardware {self.arch.key!r}"
                 )
-            self._comm_model = AnalyticalCommModel(CommSpec.from_interconnect(interconnect))
+            self._comm_model = AnalyticalCommModel(
+                CommSpec.from_interconnect(
+                    interconnect,
+                    collective_overhead_us=self.collective_overhead_us,
+                    send_recv_overhead_us=self.send_recv_overhead_us,
+                )
+            )
         self._shared_backend = build_roofline_backend(self.model, self.arch, config.roofline_tp_g)
         self._afd_stage_cache: dict[tuple[int, int, str, int, float], AFDStageDurations] = {}
 
@@ -234,6 +242,7 @@ class AnalyticalTimingBackend:
                 f"timing_backend={self.config.timing_backend};"
                 f"model={self.model.key};hardware={self.arch.key};"
                 f"gpu_backend={self.backend};tp_g={self.config.roofline_tp_g};"
+                f"collective_overhead_us={self.collective_overhead_us};"
                 f"link_us={self.config.gpu_cs_link_us}"
             ),
         )

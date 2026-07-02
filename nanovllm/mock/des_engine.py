@@ -71,6 +71,8 @@ class DESConfig:
     analytical_model: str = "openai/gpt-oss-120b"
     analytical_hardware: str = "helios"
     analytical_interconnect: str = ""
+    analytical_collective_overhead_us: float | None = None
+    analytical_send_recv_overhead_us: float | None = None
     roofline_gpu_backend: str = "roofline"
     roofline_tp_g: int = 1
     attention_groups: int = 1
@@ -92,6 +94,14 @@ class DESConfig:
         assert self.roofline_gpu_backend in ("measured", "roofline")
         assert self.roofline_tp_g > 0
         assert self.gpu_cs_link_us >= 0
+        assert (
+            self.analytical_collective_overhead_us is None
+            or self.analytical_collective_overhead_us >= 0
+        )
+        assert (
+            self.analytical_send_recv_overhead_us is None
+            or self.analytical_send_recv_overhead_us >= 0
+        )
         assert self.des_max_batch_size > 0
 
 

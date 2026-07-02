@@ -126,6 +126,36 @@ def test_analytical_backend_charges_shared_interconnect_for_tp_collectives():
     )
 
 
+def test_analytical_backend_accepts_tuned_collective_floor_override():
+    default = Config(
+        "__mock__",
+        mock_backend=True,
+        mock_mode="colocated",
+        timing_backend="analytical",
+        analytical_model="openai/gpt-oss-120b",
+        analytical_hardware="mi455x",
+        analytical_interconnect="mi455x_helios",
+        roofline_gpu_backend="roofline",
+        roofline_tp_g=4,
+    )
+    tuned = Config(
+        "__mock__",
+        mock_backend=True,
+        mock_mode="colocated",
+        timing_backend="analytical",
+        analytical_model="openai/gpt-oss-120b",
+        analytical_hardware="mi455x",
+        analytical_interconnect="mi455x_helios",
+        analytical_collective_overhead_us=6.0,
+        roofline_gpu_backend="roofline",
+        roofline_tp_g=4,
+    )
+
+    assert build_timing_backend(tuned).colocated_decode_ms(4, 1024) < build_timing_backend(
+        default
+    ).colocated_decode_ms(4, 1024)
+
+
 def test_gptoss_rawdata_regression_points_match_section5_8k():
     gpu = gpu_only_point(HELIOS, MODEL, B=256, isl=8192, tp_g=1, backend="measured")
     assert gpu["x"] == pytest_approx_pct(163.7, rel=0.005)

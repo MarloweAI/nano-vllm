@@ -651,7 +651,9 @@ decode/prefill for colocated mode and GPU FMHA attention, GPU↔CS-4 link, and
 CS-4 non-attention stages for AFD mode.
 When `--analytical-interconnect` is supplied, colocated TP>1 runs also charge
 tensor-parallel all-reduce through the shared `analytical_backend.comm` model and
-the selected interconnect YAML spec.
+the selected interconnect YAML spec. `--analytical-collective-overhead-us`
+overrides the interconnect's collective floor for tuned-comm scenarios without
+changing the YAML hardware spec.
 
 Useful flags:
 
@@ -660,6 +662,7 @@ Useful flags:
 --analytical-model openai/gpt-oss-120b
 --analytical-hardware b200|mi355x|mi455x|...
 --analytical-interconnect b200_dgx|mi355x_ubb|mi455x_helios|...
+--analytical-collective-overhead-us 6
 --roofline-gpu-backend measured|roofline
 --tp-g 1
 --gpu-cs-link-us 12

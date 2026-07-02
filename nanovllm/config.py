@@ -46,6 +46,8 @@ class Config:
     analytical_model: str = "openai/gpt-oss-120b"
     analytical_hardware: str = "helios"
     analytical_interconnect: str = ""
+    analytical_collective_overhead_us: float | None = None
+    analytical_send_recv_overhead_us: float | None = None
     roofline_gpu_backend: str = "roofline"
     roofline_tp_g: int = 1
     attention_groups: int = 1
@@ -73,6 +75,14 @@ class Config:
             assert self.attention_groups > 0
             assert self.chunk_batch > 0
             assert self.gpu_cs_link_us >= 0
+            assert (
+                self.analytical_collective_overhead_us is None
+                or self.analytical_collective_overhead_us >= 0
+            )
+            assert (
+                self.analytical_send_recv_overhead_us is None
+                or self.analytical_send_recv_overhead_us >= 0
+            )
             if self.mock_kv_capacity_tokens is not None:
                 self.num_kvcache_blocks = max(1, ceil(self.mock_kv_capacity_tokens / self.kvcache_block_size))
             elif self.num_kvcache_blocks == -1:

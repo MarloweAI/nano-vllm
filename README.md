@@ -222,6 +222,9 @@ same mock stages: GPU-only decode for colocated mode, and GPU attention /
 GPU↔CS link / CS rest for AFD mode.
 When `--analytical-interconnect` is set, colocated TP>1 runs also charge
 tensor-parallel all-reduce through the shared `analytical_backend.comm` model.
+Use `--analytical-collective-overhead-us` to run an alternate comm-floor
+scenario, such as the 6 us tuned MI455X collective floor used in comparison
+reports.
 
 ```bash
 python tools/run_mock_trace.py \
@@ -235,6 +238,21 @@ python tools/run_mock_trace.py \
 
 python tools/validate_roofline_backend.py \
   --output-dir results/roofline_validation
+
+python tools/run_mock_workload.py \
+  --mode colocated \
+  --mock-runner des \
+  --timing-backend analytical \
+  --analytical-model openai/gpt-oss-120b \
+  --analytical-hardware mi455x \
+  --analytical-interconnect mi455x_helios \
+  --analytical-collective-overhead-us 6 \
+  --tp-g 4 \
+  --fixed-isl 1024 \
+  --fixed-osl 1024 \
+  --num-requests 24 \
+  --max-num-seqs 8 \
+  --output-dir results/mi455x_tuned_comm
 ```
 
 ### DES Harness And nano-vLLM-DES Runner
