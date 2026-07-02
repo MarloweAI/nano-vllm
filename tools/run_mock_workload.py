@@ -1,6 +1,7 @@
 import argparse
 import csv
 import math
+import os
 import random
 import sys
 from dataclasses import dataclass
@@ -132,12 +133,14 @@ def run_workload(args):
     request_metrics, summary = compute_metrics(rows)
     write_request_metrics(metrics_path, request_metrics)
     write_summary_csv(output_dir / "mock_summary.csv", summary)
-    write_plots(output_dir, rows, request_metrics)
+    if os.environ.get("NANO_SKIP_MOCK_PLOTS", "0") != "1":
+        write_plots(output_dir, rows, request_metrics)
 
     print(f"wrote workload: {workload_path}")
     print(f"wrote trace: {trace_path}")
     print(f"wrote metrics: {metrics_path}")
-    print(f"wrote plots: {output_dir}")
+    if os.environ.get("NANO_SKIP_MOCK_PLOTS", "0") != "1":
+        print(f"wrote plots: {output_dir}")
     print(f"requests: {len(outputs)} tokens: {sum(len(tokens) for tokens in outputs.values())}")
 
 
