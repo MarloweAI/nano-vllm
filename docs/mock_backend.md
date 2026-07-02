@@ -649,6 +649,9 @@ AFD     = attention + GPU->CS link + CS rest + CS->GPU link
 hardware specs into the same mock runner contract. The backend models GPU-only
 decode/prefill for colocated mode and GPU FMHA attention, GPU↔CS-4 link, and
 CS-4 non-attention stages for AFD mode.
+When `--analytical-interconnect` is supplied, colocated TP>1 runs also charge
+tensor-parallel all-reduce through the shared `analytical_backend.comm` model and
+the selected interconnect YAML spec.
 
 Useful flags:
 

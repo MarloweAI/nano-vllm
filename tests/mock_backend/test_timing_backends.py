@@ -74,6 +74,58 @@ def test_analytical_backend_accepts_shared_amd_hardware_specs():
     assert backend.colocated_decode_ms(batch_size=4, context_len=1024) > 0
 
 
+def test_analytical_backend_charges_shared_interconnect_for_tp_collectives():
+    base = Config(
+        "__mock__",
+        mock_backend=True,
+        mock_mode="colocated",
+        timing_backend="analytical",
+        analytical_model="openai/gpt-oss-120b",
+        analytical_hardware="b200",
+        roofline_gpu_backend="roofline",
+        roofline_tp_g=4,
+    )
+    with_comm = Config(
+        "__mock__",
+        mock_backend=True,
+        mock_mode="colocated",
+        timing_backend="analytical",
+        analytical_model="openai/gpt-oss-120b",
+        analytical_hardware="b200",
+        analytical_interconnect="b200_dgx",
+        roofline_gpu_backend="roofline",
+        roofline_tp_g=4,
+    )
+    tp1_with_comm = Config(
+        "__mock__",
+        mock_backend=True,
+        mock_mode="colocated",
+        timing_backend="analytical",
+        analytical_model="openai/gpt-oss-120b",
+        analytical_hardware="b200",
+        analytical_interconnect="b200_dgx",
+        roofline_gpu_backend="roofline",
+        roofline_tp_g=1,
+    )
+    tp1_no_comm = Config(
+        "__mock__",
+        mock_backend=True,
+        mock_mode="colocated",
+        timing_backend="analytical",
+        analytical_model="openai/gpt-oss-120b",
+        analytical_hardware="b200",
+        roofline_gpu_backend="roofline",
+        roofline_tp_g=1,
+    )
+
+    assert build_timing_backend(with_comm).colocated_decode_ms(4, 1024) > build_timing_backend(
+        base
+    ).colocated_decode_ms(4, 1024)
+    assert build_timing_backend(tp1_with_comm).colocated_decode_ms(4, 1024) == pytest.approx(
+        build_timing_backend(tp1_no_comm).colocated_decode_ms(4, 1024)
+    )
+
+
 def test_gptoss_rawdata_regression_points_match_section5_8k():
     gpu = gpu_only_point(HELIOS, MODEL, B=256, isl=8192, tp_g=1, backend="measured")
     assert gpu["x"] == pytest_approx_pct(163.7, rel=0.005)

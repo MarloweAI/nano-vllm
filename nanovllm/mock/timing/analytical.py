@@ -3,6 +3,7 @@ from __future__ import annotations
 from nanovllm.mock.timing.backends import AFDStageDurations
 from nanovllm.mock.timing.ac_model import cs4_offload as CS4M
 
+from analytical_backend.comm import AnalyticalCommModel, CommSpec
 from analytical_backend.gpu import GpuSpec, get_gpu_spec
 from analytical_backend.pareto import (
     gpu_fmha_total as _shared_gpu_fmha_total,
@@ -14,7 +15,7 @@ from analytical_backend.pareto import (
 )
 from analytical_backend.interconnect import get_interconnect_spec
 from analytical_backend.models import Model, load_model
-from analytical_backend.serving import build_roofline_backend
+from analytical_backend.serving import DTYPE_BYTES, build_roofline_backend
 
 _MGPU = None
 
@@ -141,6 +142,7 @@ class AnalyticalTimingBackend:
         self.interconnect_key = getattr(config, "analytical_interconnect", "")
         self.model = load_model(self.model_key)
         self.arch = get_gpu_spec(self.hardware_key)
+        self._comm_model = None
         if self.interconnect_key:
             interconnect = get_interconnect_spec(self.interconnect_key)
             if interconnect.device_key != self.arch.key:
@@ -148,6 +150,7 @@ class AnalyticalTimingBackend:
                     f"interconnect {self.interconnect_key!r} targets {interconnect.device_key!r}, "
                     f"not hardware {self.arch.key!r}"
                 )
+            self._comm_model = AnalyticalCommModel(CommSpec.from_interconnect(interconnect))
         self._shared_backend = build_roofline_backend(self.model, self.arch, config.roofline_tp_g)
         self._afd_stage_cache: dict[tuple[int, int, str, int, float], AFDStageDurations] = {}
 
@@ -157,12 +160,15 @@ class AnalyticalTimingBackend:
 
     def prefill_ms(self, batch_size: int, isl: int) -> float:
         if self.backend == "roofline":
-            return self._shared_backend.prefill_step_ms(batch_size=batch_size, seq_len=isl)
+            return self._shared_backend.prefill_step_ms(
+                batch_size=batch_size,
+                seq_len=isl,
+            ) + self._tp_comm_ms(batch_size * isl)
         return self.config.prefill_base_ms + isl * self.config.prefill_ms_per_token * batch_size
 
     def colocated_decode_ms(self, batch_size: int, context_len: int) -> float:
         if self.backend == "roofline":
-            return self._shared_backend.decode_step_ms(batch_size, context_len)
+            return self._shared_backend.decode_step_ms(batch_size, context_len) + self._tp_comm_ms(batch_size)
         return tpot_seconds(
             self.arch,
             self.model,
@@ -171,6 +177,18 @@ class AnalyticalTimingBackend:
             self.config.roofline_tp_g,
             backend=self.backend,
         ) * 1e3
+
+    def _tp_comm_ms(self, num_tokens: int) -> float:
+        tp_g = self.config.roofline_tp_g
+        if self._comm_model is None or tp_g <= 1 or num_tokens <= 0:
+            return 0.0
+        tensor_bytes = int(num_tokens * self.model.d * DTYPE_BYTES[self.model.act])
+        # One attention output all-reduce and one MLP/MoE output all-reduce per layer.
+        return (
+            2.0
+            * self.model.L
+            * self._comm_model.allreduce_ms(tensor_bytes, tp_g, floor=True)
+        )
 
     def afd_decode_stages_ms(self, microbatch_size: int, context_len: int) -> AFDStageDurations:
         cache_key = (

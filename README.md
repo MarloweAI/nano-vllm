@@ -220,6 +220,8 @@ latency formulas. For shared model/hardware roofline studies, use
 the top-level `analytical_backend` package, then maps those timings onto the
 same mock stages: GPU-only decode for colocated mode, and GPU attention /
 GPU↔CS link / CS rest for AFD mode.
+When `--analytical-interconnect` is set, colocated TP>1 runs also charge
+tensor-parallel all-reduce through the shared `analytical_backend.comm` model.
 
 ```bash
 python tools/run_mock_trace.py \
