@@ -645,15 +645,23 @@ decode  = decode_base_ms + decode_ms_per_token * batch_size
 AFD     = attention + GPU->CS link + CS rest + CS->GPU link
 ```
 
-`timing_backend="analytical"` adapts the shared `analytical_backend` model and
-hardware specs into the same mock runner contract. The backend models GPU-only
-decode/prefill for colocated mode and GPU FMHA attention, GPU↔CS-4 link, and
-CS-4 non-attention stages for AFD mode.
+`timing_backend="analytical"` adapts the shared `analytical_backend` model,
+GPU, interconnect, roofline-cost, and comm specs into the same mock runner
+contract. The backend models GPU-only decode/prefill for colocated mode and GPU
+FMHA attention, GPU↔CS-4 link, and CS-4 non-attention stages for AFD mode.
 When `--analytical-interconnect` is supplied, colocated TP>1 runs also charge
 tensor-parallel all-reduce through the shared `analytical_backend.comm` model and
 the selected interconnect YAML spec. `--analytical-collective-overhead-us`
 overrides the interconnect's collective floor for tuned-comm scenarios without
 changing the YAML hardware spec.
+
+The same adapter can select Frontier's calibrated InferenceX policy with CLI
+flags rather than nano-specific code: `--analytical-overlap-comm`,
+`--analytical-launch-overhead-us`, `--analytical-decode-launch-overhead-us`,
+`--analytical-graph-launch-overhead-us`, utilization overrides,
+`--analytical-tp-sharding-beta`, `--analytical-moe-grouped-gemm-efficiency`,
+and the eager prefill overhead flags. Without those flags, nano uses the shared
+backend defaults.
 
 Useful flags:
 
@@ -663,6 +671,12 @@ Useful flags:
 --analytical-hardware b200|mi355x|mi455x|...
 --analytical-interconnect b200_dgx|mi355x_ubb|mi455x_helios|...
 --analytical-collective-overhead-us 6
+--analytical-overlap-comm
+--analytical-decode-launch-overhead-us 0
+--analytical-graph-launch-overhead-us 2
+--analytical-hbm-utilization 0.866
+--analytical-flop-utilization 0.5
+--analytical-tp-sharding-beta 1.0
 --roofline-gpu-backend measured|roofline
 --tp-g 1
 --gpu-cs-link-us 12

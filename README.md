@@ -27,8 +27,8 @@ It includes:
 - **DES timing paths**: a standalone discrete-event harness plus an
   in-engine `mock_runner="des"` runner that replays each nano-vLLM scheduled
   decode batch through DES resource timing.
-- **Timing backends**: simple parametric timing plus a GPT-OSS roofline adapter
-  derived from the [original analytical model](docs/perf_model.pdf).
+- **Timing backends**: simple parametric timing plus a shared analytical
+  roofline adapter backed by the top-level `analytical_backend` package.
 - **Metrics and workload tools**: trace metrics, synthetic workload generation,
   and SVG/CSV result artifacts.
 - **Validation plots**: reproduced 8K and 1M ISL analytical / nano-vLLM mock /
@@ -225,6 +225,13 @@ tensor-parallel all-reduce through the shared `analytical_backend.comm` model.
 Use `--analytical-collective-overhead-us` to run an alternate comm-floor
 scenario, such as the 6 us tuned MI455X collective floor used in comparison
 reports.
+
+The analytical backend exposes the same calibration knobs Frontier uses for its
+InferenceX analytical path: `--analytical-overlap-comm`,
+`--analytical-launch-overhead-us`, `--analytical-decode-launch-overhead-us`,
+`--analytical-graph-launch-overhead-us`, utilization overrides,
+`--analytical-tp-sharding-beta`, and the prefill eager-overhead controls. The
+default nano path stays ideal unless those flags are supplied.
 
 ```bash
 python tools/run_mock_trace.py \

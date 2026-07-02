@@ -11,6 +11,20 @@ HELIOS = get_gpu_spec("helios")
 MODEL = load_model("openai/gpt-oss-120b")
 
 
+def analytical_config(**overrides):
+    kwargs = {
+        "mock_backend": True,
+        "mock_mode": "colocated",
+        "timing_backend": "analytical",
+        "analytical_model": "openai/gpt-oss-120b",
+        "analytical_hardware": "b200",
+        "roofline_gpu_backend": "roofline",
+        "roofline_tp_g": 1,
+    }
+    kwargs.update(overrides)
+    return Config("__mock__", **kwargs)
+
+
 def test_parametric_timing_backend_preserves_existing_formulas():
     config = Config(
         "__mock__",
@@ -153,6 +167,74 @@ def test_analytical_backend_accepts_tuned_collective_floor_override():
 
     assert build_timing_backend(tuned).colocated_decode_ms(4, 1024) < build_timing_backend(
         default
+    ).colocated_decode_ms(4, 1024)
+
+
+def test_analytical_backend_can_overlap_shared_tp_collectives():
+    serial = analytical_config(
+        analytical_interconnect="b200_dgx",
+        roofline_tp_g=4,
+    )
+    overlapped = analytical_config(
+        analytical_interconnect="b200_dgx",
+        analytical_overlap_comm=True,
+        roofline_tp_g=4,
+    )
+
+    assert build_timing_backend(overlapped).colocated_decode_ms(4, 1024) < build_timing_backend(
+        serial
+    ).colocated_decode_ms(4, 1024)
+
+
+def test_analytical_backend_uses_shared_comm_bandwidth_efficiency_override():
+    slow_comm = analytical_config(
+        analytical_interconnect="b200_dgx",
+        analytical_bandwidth_efficiency=0.25,
+        roofline_tp_g=4,
+    )
+    fast_comm = analytical_config(
+        analytical_interconnect="b200_dgx",
+        analytical_bandwidth_efficiency=0.95,
+        roofline_tp_g=4,
+    )
+
+    assert build_timing_backend(fast_comm).colocated_decode_ms(64, 1024) < build_timing_backend(
+        slow_comm
+    ).colocated_decode_ms(64, 1024)
+
+
+def test_analytical_backend_uses_tp_sharding_beta():
+    sublinear = analytical_config(analytical_tp_sharding_beta=0.6, roofline_tp_g=4)
+    linear = analytical_config(analytical_tp_sharding_beta=1.0, roofline_tp_g=4)
+
+    assert build_timing_backend(sublinear).colocated_decode_ms(16, 1024) > build_timing_backend(
+        linear
+    ).colocated_decode_ms(16, 1024)
+
+
+def test_analytical_backend_uses_prefill_eager_calibration_knobs():
+    base = analytical_config(analytical_moe_grouped_gemm_efficiency=0.12)
+    extra_eager = analytical_config(
+        analytical_moe_grouped_gemm_efficiency=0.12,
+        analytical_moe_grouped_gemm_eager_overhead_us=100.0,
+        analytical_attn_proj_eager_overhead_us=37.0,
+    )
+
+    assert build_timing_backend(extra_eager).prefill_ms(1, 1024) > build_timing_backend(
+        base
+    ).prefill_ms(1, 1024)
+
+
+def test_analytical_backend_uses_graph_decode_launch_calibration():
+    eager_like = analytical_config(analytical_launch_overhead_us=25.0)
+    graph_decode = analytical_config(
+        analytical_launch_overhead_us=25.0,
+        analytical_decode_launch_overhead_us=0.0,
+        analytical_graph_launch_overhead_us=2.0,
+    )
+
+    assert build_timing_backend(graph_decode).colocated_decode_ms(4, 1024) < build_timing_backend(
+        eager_like
     ).colocated_decode_ms(4, 1024)
 
 
