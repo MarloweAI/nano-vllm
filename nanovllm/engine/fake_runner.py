@@ -250,6 +250,7 @@ class FakeDESRunner(FakeColocatedRunner):
             gpu_cs_link_us=self.config.gpu_cs_link_us,
             des_batch_decode=True,
             des_max_batch_size=len(seqs),
+            des_skip_initial_prefill=True,
         )
         engine = DESEngine(config)
         for idx, seq in enumerate(seqs):

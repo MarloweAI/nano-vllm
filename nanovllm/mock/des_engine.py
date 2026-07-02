@@ -76,6 +76,7 @@ class DESConfig:
     gpu_cs_link_us: float = 12.0
     des_batch_decode: bool = False
     des_max_batch_size: int = 512
+    des_skip_initial_prefill: bool = False
 
     def __post_init__(self):
         assert self.mode in ("colocated", "afd")
@@ -186,6 +187,9 @@ class DESEngine:
         state.kv_tokens = state.spec.isl
         self._refresh_kv_blocks()
         self._emit(state, "request_arrival", event.time_ms, notes="des_arrival")
+        if self.config.des_skip_initial_prefill:
+            self._push(event.time_ms, "prefill_done", event.request_id)
+            return
         duration = self.timing.prefill_ms(1, state.spec.isl)
         resource_id, start, end = self.prefill.reserve(event.time_ms, duration)
         self._emit_resource(state, "prefill", start, end, resource_id, event.time_ms)
