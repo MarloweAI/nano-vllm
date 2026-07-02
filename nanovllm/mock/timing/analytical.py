@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from nanovllm.mock.timing.backends import AFDStageDurations
-from nanovllm.mock.timing.ac_model import cs4_offload as CS4M
+from analytical_backend.ac_model import cs4_offload as CS4M
 
 from analytical_backend.calibration import calibration_from_config
 from analytical_backend.gpu import GpuSpec
@@ -23,7 +23,7 @@ _MGPU = None
 def _mgpu():
     global _MGPU
     if _MGPU is None:
-        from nanovllm.mock.timing.ac_model.measured_gpu import MeasuredGPU
+        from analytical_backend.ac_model.measured_gpu import MeasuredGPU
 
         _MGPU = MeasuredGPU()
     return _MGPU
