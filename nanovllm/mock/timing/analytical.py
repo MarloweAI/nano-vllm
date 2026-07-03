@@ -4,6 +4,12 @@ from nanovllm.mock.timing.backends import AFDStageDurations
 from analytical_backend.ac_model import cs4_offload as CS4M
 
 from analytical_backend.calibration import calibration_from_config
+from analytical_backend.disagg import (
+    AFDServingModel,
+    AFDSpec,
+    ScaleOutLinkSpec,
+    kv_transfer_ms,
+)
 from analytical_backend.gpu import GpuSpec
 from analytical_backend.pareto import (
     gpu_fmha_total as _shared_gpu_fmha_total,
@@ -199,6 +205,36 @@ class AnalyticalTimingBackend:
             backend=self.backend,
         ) * 1e3
 
+    def kv_transfer_ms(self, context_len: int) -> float:
+        """PDD KV hop, priced by the shared disagg helper (scale-out link)."""
+        return kv_transfer_ms(
+            self.model,
+            context_len,
+            link=ScaleOutLinkSpec(
+                bandwidth_gbps=getattr(self.config, "pdd_kv_link_gbps", 100.0),
+                latency_ms=getattr(self.config, "pdd_kv_link_latency_ms", 0.1),
+            ),
+        )
+
+    def _afd_gpu_model(self) -> AFDServingModel:
+        model = getattr(self, "_afd_gpu", None)
+        if model is None:
+            model = AFDServingModel(
+                self.model,
+                self.hardware_key,
+                getattr(self.config, "afd_ffn_hardware", "") or self.hardware_key,
+                spec=AFDSpec(
+                    attn_tp=self.config.roofline_tp_g,
+                    ffn_tp=getattr(self.config, "afd_ffn_tp", 1),
+                    ffn_ep=getattr(self.config, "afd_ffn_ep", 1),
+                ),
+                interconnect=self.interconnect_key,
+                profile=self.profile,
+                calibration=self.calibration,
+            )
+            self._afd_gpu = model
+        return model
+
     def afd_decode_stages_ms(self, microbatch_size: int, context_len: int) -> AFDStageDurations:
         cache_key = (
             microbatch_size,
@@ -206,9 +242,31 @@ class AnalyticalTimingBackend:
             self.backend,
             self.config.roofline_tp_g,
             self.config.gpu_cs_link_us,
+            getattr(self.config, "afd_ffn_backend", "cs4"),
         )
         if cache_key in self._afd_stage_cache:
             return self._afd_stage_cache[cache_key]
+
+        if getattr(self.config, "afd_ffn_backend", "cs4") == "gpu":
+            # GPU-AFD: the FFN pool is GPUs priced by the shared disagg model;
+            # the CS-4 path below is untouched.
+            st = self._afd_gpu_model().decode_stage_times(microbatch_size, context_len)
+            durations = AFDStageDurations(
+                attention_ms=st.attention_ms,
+                gpu_to_cs_link_ms=st.link_ms,
+                cs_rest_ms=st.ffn_ms,
+                cs_to_gpu_link_ms=st.link_ms,
+                notes=(
+                    f"timing_backend={self.config.timing_backend};afd_ffn=gpu;"
+                    f"model={self.model.key};attn_hw={self.arch.key};"
+                    f"ffn_hw={getattr(self.config, 'afd_ffn_hardware', '') or self.arch.key};"
+                    f"attn_tp={self.config.roofline_tp_g};"
+                    f"ffn_tp={getattr(self.config, 'afd_ffn_tp', 1)};"
+                    f"ffn_ep={getattr(self.config, 'afd_ffn_ep', 1)}"
+                ),
+            )
+            self._afd_stage_cache[cache_key] = durations
+            return durations
 
         old_link = CS4M.CLOS_LAT_US
         CS4M.CLOS_LAT_US = self.config.gpu_cs_link_us

@@ -36,6 +36,14 @@ def add_timing_backend_args(parser):
     parser.add_argument("--analytical-prefill-per-layer-overhead-us", type=float, default=None)
     parser.add_argument("--analytical-kernel-floor-multiplier", type=float, default=None)
     parser.add_argument("--analytical-tp-sharding-beta", type=float, default=None)
+    parser.add_argument("--afd-ffn-backend", choices=["cs4", "gpu"], default="cs4")
+    parser.add_argument("--afd-ffn-hardware", default="")
+    parser.add_argument("--afd-ffn-tp", type=int, default=1)
+    parser.add_argument("--afd-ffn-ep", type=int, default=1)
+    parser.add_argument("--pdd-prefill-replicas", type=int, default=1)
+    parser.add_argument("--pdd-kv-link-gbps", type=float, default=100.0)
+    parser.add_argument("--pdd-kv-link-latency-ms", type=float, default=0.1)
+    parser.add_argument("--pdd-kv-link-lanes", type=int, default=1)
     parser.add_argument("--roofline-gpu-backend", choices=["measured", "roofline"], default="roofline")
     parser.add_argument("--tp-g", "--roofline-tp-g", dest="roofline_tp_g", type=int, default=1)
     parser.add_argument("--attention-groups", type=int, default=1)
@@ -70,6 +78,14 @@ def timing_backend_kwargs(args):
         "analytical_prefill_per_layer_overhead_us": args.analytical_prefill_per_layer_overhead_us,
         "analytical_kernel_floor_multiplier": args.analytical_kernel_floor_multiplier,
         "analytical_tp_sharding_beta": args.analytical_tp_sharding_beta,
+        "afd_ffn_backend": args.afd_ffn_backend,
+        "afd_ffn_hardware": args.afd_ffn_hardware,
+        "afd_ffn_tp": args.afd_ffn_tp,
+        "afd_ffn_ep": args.afd_ffn_ep,
+        "pdd_prefill_replicas": args.pdd_prefill_replicas,
+        "pdd_kv_link_gbps": args.pdd_kv_link_gbps,
+        "pdd_kv_link_latency_ms": args.pdd_kv_link_latency_ms,
+        "pdd_kv_link_lanes": args.pdd_kv_link_lanes,
         "roofline_gpu_backend": args.roofline_gpu_backend,
         "roofline_tp_g": args.roofline_tp_g,
         "attention_groups": args.attention_groups,

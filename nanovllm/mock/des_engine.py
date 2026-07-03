@@ -92,6 +92,14 @@ class DESConfig:
     analytical_prefill_per_layer_overhead_us: float | None = None
     analytical_kernel_floor_multiplier: float | None = None
     analytical_tp_sharding_beta: float | None = None
+    afd_ffn_backend: str = "cs4"
+    afd_ffn_hardware: str = ""
+    afd_ffn_tp: int = 1
+    afd_ffn_ep: int = 1
+    pdd_prefill_replicas: int = 1
+    pdd_kv_link_gbps: float = 100.0
+    pdd_kv_link_latency_ms: float = 0.1
+    pdd_kv_link_lanes: int = 1
     roofline_gpu_backend: str = "roofline"
     roofline_tp_g: int = 1
     attention_groups: int = 1
@@ -102,7 +110,7 @@ class DESConfig:
     des_skip_initial_prefill: bool = False
 
     def __post_init__(self):
-        assert self.mode in ("colocated", "afd")
+        assert self.mode in ("colocated", "afd", "pdd")
         assert self.attention_replicas > 0
         assert self.gpu_to_cs_link_resources > 0
         assert self.cs_rest_resources > 0
@@ -202,7 +210,9 @@ class DESEngine:
         self.cs_rest = ResourcePool("cs_rest", config.cs_rest_resources)
         self.cs_to_gpu = ResourcePool("cs_to_gpu_link", config.cs_to_gpu_link_resources)
         self.colocated_decode = ResourcePool("decode", 1)
-        self.prefill = ResourcePool("prefill", 1)
+        prefill_replicas = config.pdd_prefill_replicas if config.mode == "pdd" else 1
+        self.prefill = ResourcePool("prefill", prefill_replicas)
+        self.kv_link = ResourcePool("pdd_kv_link", config.pdd_kv_link_lanes)
         self.used_kv_blocks = 0
         self.timing = build_timing_backend(config)
         self.decode_ready: list[tuple[int, float]] = []
@@ -242,6 +252,18 @@ class DESEngine:
     def _handle_prefill_done(self, event: Event):
         state = self._state(event.request_id)
         self._emit(state, "prefill_end", event.time_ms)
+        if self.config.mode == "pdd":
+            # PDD: the request's KV moves prefill cluster -> decode cluster
+            # once, over the scale-out link, before any decode token.
+            duration = self.timing.kv_transfer_ms(state.spec.isl)
+            resource_id, start, end = self.kv_link.reserve(event.time_ms, duration)
+            self._emit_resource(state, "pdd_kv_transfer", start, end, resource_id, event.time_ms)
+            self._push(end, "kv_transfer_done", event.request_id)
+            return
+        self._schedule_decode_token(state, event.time_ms)
+
+    def _handle_kv_transfer_done(self, event: Event):
+        state = self._state(event.request_id)
         self._schedule_decode_token(state, event.time_ms)
 
     def _schedule_decode_token(self, state: RequestState, ready_ms: float):
@@ -249,7 +271,7 @@ class DESEngine:
             self._mark_decode_ready(state, ready_ms)
             return
 
-        if self.config.mode == "colocated":
+        if self.config.mode in ("colocated", "pdd"):
             duration = self.timing.colocated_decode_ms(1, state.spec.isl + state.generated_tokens)
             resource_id, start, end = self.colocated_decode.reserve(ready_ms, duration)
             self._emit_resource(state, "decode", start, end, resource_id, ready_ms)
@@ -288,7 +310,7 @@ class DESEngine:
         self.decode_ready = ready[self.config.des_max_batch_size:] + future
         states = [self._state(request_id) for request_id, _ in batch]
         context_len = max(state.spec.isl + state.generated_tokens for state in states)
-        if self.config.mode == "colocated":
+        if self.config.mode in ("colocated", "pdd"):
             duration = self.timing.colocated_decode_ms(len(states), context_len)
             resource_id, start, end = self.colocated_decode.reserve(event.time_ms, duration)
             for state, (_, ready_ms) in zip(states, batch):

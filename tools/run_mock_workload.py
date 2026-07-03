@@ -244,7 +244,7 @@ def write_svg(path: Path, title: str, x_label: str, y_label: str, body: str, wid
 
 def main():
     parser = argparse.ArgumentParser(description="Generate and run a synthetic mock serving workload.")
-    parser.add_argument("--mode", choices=["colocated", "afd"], default="colocated")
+    parser.add_argument("--mode", choices=["colocated", "afd", "pdd"], default="colocated")
     parser.add_argument("--mock-runner", choices=["fake", "des"], default="fake")
     parser.add_argument("--num-requests", type=int, default=16)
     parser.add_argument("--arrival-process", choices=["poisson", "burst"], default="burst")

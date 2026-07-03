@@ -25,6 +25,9 @@ class TimingBackend(Protocol):
     def afd_decode_stages_ms(self, microbatch_size: int, context_len: int) -> AFDStageDurations:
         ...
 
+    def kv_transfer_ms(self, context_len: int) -> float:
+        ...
+
 
 class ParametricTimingBackend:
     """Compatibility backend for the original mock timing formulas."""
@@ -39,6 +42,15 @@ class ParametricTimingBackend:
 
     def colocated_decode_ms(self, batch_size: int, context_len: int) -> float:
         return self.config.decode_base_ms + self.config.decode_ms_per_token * batch_size
+
+    def kv_transfer_ms(self, context_len: int) -> float:
+        # PDD KV hop with a parametric per-token KV size (no model spec here);
+        # 72 KiB/token is the gpt-oss-120b fp16 figure.
+        kib_per_token = getattr(self.config, "pdd_kv_kib_per_token", 72.0)
+        bytes_ = context_len * kib_per_token * 1024.0
+        gbps = getattr(self.config, "pdd_kv_link_gbps", 100.0)
+        latency = getattr(self.config, "pdd_kv_link_latency_ms", 0.1)
+        return latency + bytes_ * 8.0 / (gbps * 1e6)
 
     def afd_decode_stages_ms(self, microbatch_size: int, context_len: int) -> AFDStageDurations:
         attention_ms = (

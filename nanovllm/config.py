@@ -67,6 +67,14 @@ class Config:
     analytical_prefill_per_layer_overhead_us: float | None = None
     analytical_kernel_floor_multiplier: float | None = None
     analytical_tp_sharding_beta: float | None = None
+    afd_ffn_backend: str = "cs4"
+    afd_ffn_hardware: str = ""
+    afd_ffn_tp: int = 1
+    afd_ffn_ep: int = 1
+    pdd_prefill_replicas: int = 1
+    pdd_kv_link_gbps: float = 100.0
+    pdd_kv_link_latency_ms: float = 0.1
+    pdd_kv_link_lanes: int = 1
     roofline_gpu_backend: str = "roofline"
     roofline_tp_g: int = 1
     attention_groups: int = 1
@@ -79,7 +87,7 @@ class Config:
                 self.kvcache_block_size = self.mock_block_size
             assert self.kvcache_block_size > 0
             assert 1 <= self.tensor_parallel_size <= 8
-            assert self.mock_mode in ("colocated", "afd")
+            assert self.mock_mode in ("colocated", "afd", "pdd")
             assert self.mock_runner in ("fake", "des")
             assert self.pipeline_mode in ("sequential", "ideal_pipeline", "discrete_pipeline")
             assert self.num_layers > 0
