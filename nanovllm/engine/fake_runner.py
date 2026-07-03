@@ -46,6 +46,13 @@ class FakeColocatedRunner:
         if is_prefill:
             isl = max(seq.num_scheduled_tokens for seq in seqs)
             self.last_latency_ms = self.timing.prefill_ms(batch_size, isl)
+            if self.config.mock_mode == "pdd":
+                # PDD: the per-request KV hop to the decode cluster, charged
+                # once at prefill completion (lanes transfer concurrently; the
+                # longest request bounds the batch).
+                self.last_latency_ms += max(
+                    self.timing.kv_transfer_ms(len(seq)) for seq in seqs
+                )
         else:
             context_len = max(len(seq) for seq in seqs)
             self.last_latency_ms = self.timing.colocated_decode_ms(batch_size, context_len)

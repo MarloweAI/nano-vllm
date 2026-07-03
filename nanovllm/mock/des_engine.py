@@ -252,9 +252,13 @@ class DESEngine:
     def _handle_prefill_done(self, event: Event):
         state = self._state(event.request_id)
         self._emit(state, "prefill_end", event.time_ms)
-        if self.config.mode == "pdd":
+        if self.config.mode == "pdd" and not self.config.des_skip_initial_prefill:
             # PDD: the request's KV moves prefill cluster -> decode cluster
-            # once, over the scale-out link, before any decode token.
+            # ONCE, over the scale-out link, before any decode token. Guarded
+            # off in per-step delegation (des_skip_initial_prefill: the
+            # FakeDESRunner builds a fresh engine per decode round, so a
+            # request-lifecycle cost here would wrongly repeat per token;
+            # the runner charges the hop once at prefill instead).
             duration = self.timing.kv_transfer_ms(state.spec.isl)
             resource_id, start, end = self.kv_link.reserve(event.time_ms, duration)
             self._emit_resource(state, "pdd_kv_transfer", start, end, resource_id, event.time_ms)
