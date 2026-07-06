@@ -67,7 +67,7 @@ class Config:
     analytical_prefill_per_layer_overhead_us: float | None = None
     analytical_kernel_floor_multiplier: float | None = None
     analytical_tp_sharding_beta: float | None = None
-    afd_ffn_backend: str = "cs4"  # cs4 (legacy analytical) | gpu | cs4-measured (Cerebras submodule)
+    afd_ffn_backend: str = "cs4-measured"  # cs4-measured (Cerebras submodule) | gpu
     afd_ffn_hardware: str = ""
     afd_ffn_tp: int = 1
     afd_ffn_ep: int = 1

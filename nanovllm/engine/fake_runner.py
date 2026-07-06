@@ -279,6 +279,8 @@ class FakeDESRunner(FakeColocatedRunner):
             afd_ffn_hardware=self.config.afd_ffn_hardware,
             afd_ffn_tp=self.config.afd_ffn_tp,
             afd_ffn_ep=self.config.afd_ffn_ep,
+            afd_ffn_wafers=getattr(self.config, "afd_ffn_wafers", 2),
+            afd_ffn_cs_arch=getattr(self.config, "afd_ffn_cs_arch", "CS3"),
             pdd_prefill_replicas=self.config.pdd_prefill_replicas,
             pdd_kv_link_gbps=self.config.pdd_kv_link_gbps,
             pdd_kv_link_latency_ms=self.config.pdd_kv_link_latency_ms,

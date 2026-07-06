@@ -92,10 +92,12 @@ class DESConfig:
     analytical_prefill_per_layer_overhead_us: float | None = None
     analytical_kernel_floor_multiplier: float | None = None
     analytical_tp_sharding_beta: float | None = None
-    afd_ffn_backend: str = "cs4"
+    afd_ffn_backend: str = "cs4-measured"
     afd_ffn_hardware: str = ""
     afd_ffn_tp: int = 1
     afd_ffn_ep: int = 1
+    afd_ffn_wafers: int = 2
+    afd_ffn_cs_arch: str = "CS3"
     pdd_prefill_replicas: int = 1
     pdd_kv_link_gbps: float = 100.0
     pdd_kv_link_latency_ms: float = 0.1

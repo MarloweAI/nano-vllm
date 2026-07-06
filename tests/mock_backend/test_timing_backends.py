@@ -2,8 +2,7 @@ import pytest
 
 from nanovllm.config import Config
 from nanovllm.mock.timing import build_timing_backend
-from nanovllm.mock.timing.ac_model import cs4_offload as CS4M
-from nanovllm.mock.timing.analytical import gpu_only_point, hybrid_point
+from nanovllm.mock.timing.analytical import gpu_only_point
 from analytical_backend.gpu import get_gpu_spec
 from analytical_backend.models import load_model
 
@@ -239,32 +238,11 @@ def test_analytical_backend_uses_graph_decode_launch_calibration():
 
 
 def test_gptoss_rawdata_regression_points_match_section5_8k():
+    # GPU-only (all-on-MI455X) decode anchor; the legacy cs4-hybrid regression was
+    # dropped with the cs4_offload purge (Cerebras now goes through the submodule).
     gpu = gpu_only_point(HELIOS, MODEL, B=256, isl=8192, tp_g=1, backend="measured")
     assert gpu["x"] == pytest_approx_pct(163.7, rel=0.005)
     assert gpu["y"] == pytest_approx_pct(41896.2, rel=0.005)
-
-    old_link = CS4M.CLOS_LAT_US
-    CS4M.CLOS_LAT_US = 12.0
-    try:
-        hybrid = hybrid_point(HELIOS, MODEL, gb=256, isl=8192, tp_g=1, a_g=1, ck=128, backend="measured")
-    finally:
-        CS4M.CLOS_LAT_US = old_link
-    assert hybrid["x"] == pytest_approx_pct(327.8, rel=0.005)
-    assert hybrid["y"] == pytest_approx_pct(83920.8, rel=0.005)
-
-
-def test_gptoss_link_latency_changes_interactivity_not_pipeline_filled_throughput():
-    old_link = CS4M.CLOS_LAT_US
-    try:
-        CS4M.CLOS_LAT_US = 4.0
-        fast = hybrid_point(HELIOS, MODEL, gb=256, isl=8192, tp_g=1, a_g=1, ck=64, backend="measured")
-        CS4M.CLOS_LAT_US = 36.0
-        slow = hybrid_point(HELIOS, MODEL, gb=256, isl=8192, tp_g=1, a_g=1, ck=64, backend="measured")
-    finally:
-        CS4M.CLOS_LAT_US = old_link
-
-    assert fast["x"] > slow["x"]
-    assert fast["y"] == pytest_approx_pct(slow["y"], rel=0.0001)
 
 
 def pytest_approx_pct(expected, rel):

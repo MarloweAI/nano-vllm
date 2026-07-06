@@ -36,10 +36,12 @@ def add_timing_backend_args(parser):
     parser.add_argument("--analytical-prefill-per-layer-overhead-us", type=float, default=None)
     parser.add_argument("--analytical-kernel-floor-multiplier", type=float, default=None)
     parser.add_argument("--analytical-tp-sharding-beta", type=float, default=None)
-    parser.add_argument("--afd-ffn-backend", choices=["cs4", "gpu"], default="cs4")
+    parser.add_argument("--afd-ffn-backend", choices=["gpu", "cs4-measured"], default="cs4-measured")
     parser.add_argument("--afd-ffn-hardware", default="")
     parser.add_argument("--afd-ffn-tp", type=int, default=1)
     parser.add_argument("--afd-ffn-ep", type=int, default=1)
+    parser.add_argument("--afd-ffn-wafers", type=int, default=2)
+    parser.add_argument("--afd-ffn-cs-arch", default="CS3")
     parser.add_argument("--pdd-prefill-replicas", type=int, default=1)
     parser.add_argument("--pdd-kv-link-gbps", type=float, default=100.0)
     parser.add_argument("--pdd-kv-link-latency-ms", type=float, default=0.1)
@@ -82,6 +84,8 @@ def timing_backend_kwargs(args):
         "afd_ffn_hardware": args.afd_ffn_hardware,
         "afd_ffn_tp": args.afd_ffn_tp,
         "afd_ffn_ep": args.afd_ffn_ep,
+        "afd_ffn_wafers": args.afd_ffn_wafers,
+        "afd_ffn_cs_arch": args.afd_ffn_cs_arch,
         "pdd_prefill_replicas": args.pdd_prefill_replicas,
         "pdd_kv_link_gbps": args.pdd_kv_link_gbps,
         "pdd_kv_link_latency_ms": args.pdd_kv_link_latency_ms,
