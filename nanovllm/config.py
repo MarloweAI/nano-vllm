@@ -67,10 +67,12 @@ class Config:
     analytical_prefill_per_layer_overhead_us: float | None = None
     analytical_kernel_floor_multiplier: float | None = None
     analytical_tp_sharding_beta: float | None = None
-    afd_ffn_backend: str = "cs4"
+    afd_ffn_backend: str = "cs4"  # cs4 (legacy analytical) | gpu | cs4-measured (Cerebras submodule)
     afd_ffn_hardware: str = ""
     afd_ffn_tp: int = 1
     afd_ffn_ep: int = 1
+    afd_ffn_wafers: int = 2       # cs4-measured: CS wafers holding the experts (EP unit)
+    afd_ffn_cs_arch: str = "CS3"  # cs4-measured: measured-data arch (CS3 today; CS4/CS5 when landed)
     pdd_prefill_replicas: int = 1
     pdd_kv_link_gbps: float = 100.0
     pdd_kv_link_latency_ms: float = 0.1

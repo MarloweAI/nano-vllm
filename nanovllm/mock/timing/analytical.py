@@ -235,6 +235,29 @@ class AnalyticalTimingBackend:
             self._afd_gpu = model
         return model
 
+    def _afd_cerebras_model(self) -> AFDServingModel:
+        """AFD model with the FFN priced by the measured Cerebras submodule."""
+        model = getattr(self, "_afd_cerebras", None)
+        if model is None:
+            from analytical_backend import CerebrasMeasuredBackend
+
+            backend = CerebrasMeasuredBackend(
+                self.model,
+                wafer_count=getattr(self.config, "afd_ffn_wafers", 2),
+                arch=getattr(self.config, "afd_ffn_cs_arch", "CS3"),
+            )
+            model = AFDServingModel(
+                self.model,
+                self.hardware_key,
+                spec=AFDSpec(attn_tp=self.config.roofline_tp_g),
+                interconnect=self.interconnect_key,
+                profile=self.profile,
+                calibration=self.calibration,
+                ffn_backend=backend,
+            )
+            self._afd_cerebras = model
+        return model
+
     def afd_decode_stages_ms(self, microbatch_size: int, context_len: int) -> AFDStageDurations:
         cache_key = (
             microbatch_size,
@@ -263,6 +286,26 @@ class AnalyticalTimingBackend:
                     f"attn_tp={self.config.roofline_tp_g};"
                     f"ffn_tp={getattr(self.config, 'afd_ffn_tp', 1)};"
                     f"ffn_ep={getattr(self.config, 'afd_ffn_ep', 1)}"
+                ),
+            )
+            self._afd_stage_cache[cache_key] = durations
+            return durations
+
+        if getattr(self.config, "afd_ffn_backend", "cs4") == "cs4-measured":
+            # CS-4 AFD with the FFN priced by the measured Cerebras submodule
+            # (moe_decode_sim.perf). The backend supplies its own GPU<->CS link
+            # (its InterconnectSpec), so gpu_cs_link_us does not apply here.
+            st = self._afd_cerebras_model().decode_stage_times(microbatch_size, context_len)
+            durations = AFDStageDurations(
+                attention_ms=st.attention_ms,
+                gpu_to_cs_link_ms=st.link_ms,
+                cs_rest_ms=st.ffn_ms,
+                cs_to_gpu_link_ms=st.link_ms,
+                notes=(
+                    f"timing_backend={self.config.timing_backend};afd_ffn=cs4-measured;"
+                    f"model={self.model.key};attn_hw={self.arch.key};"
+                    f"wafers={getattr(self.config, 'afd_ffn_wafers', 2)};"
+                    f"cs_arch={getattr(self.config, 'afd_ffn_cs_arch', 'CS3')}"
                 ),
             )
             self._afd_stage_cache[cache_key] = durations
