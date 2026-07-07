@@ -16,6 +16,12 @@ class AFDStageDurations:
 class TimingBackend(Protocol):
     name: str
 
+    @property
+    def num_layers(self) -> int:
+        """Transformer layer count. afd_decode_stages_ms prices ONE layer, so the
+        DES scales its per-layer AFD pipeline by this to get the per-token step."""
+        ...
+
     def prefill_ms(self, batch_size: int, isl: int) -> float:
         ...
 
@@ -36,6 +42,13 @@ class ParametricTimingBackend:
 
     def __init__(self, config):
         self.config = config
+
+    @property
+    def num_layers(self) -> int:
+        # The parametric AFD formula is a lumped single-stage model (not per-layer),
+        # so default to 1: the DES per-layer scaling is a no-op unless a layer count
+        # is explicitly configured.
+        return int(getattr(self.config, "num_layers", 1) or 1)
 
     def prefill_ms(self, batch_size: int, isl: int) -> float:
         return self.config.prefill_base_ms + isl * self.config.prefill_ms_per_token * batch_size

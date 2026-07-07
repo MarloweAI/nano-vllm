@@ -133,6 +133,10 @@ class AnalyticalTimingBackend:
         self._afd_stage_cache: dict[tuple[int, int, str, int, float], AFDStageDurations] = {}
 
     @property
+    def num_layers(self) -> int:
+        return int(self.model.L)
+
+    @property
     def backend(self) -> str:
         return self.config.roofline_gpu_backend
 

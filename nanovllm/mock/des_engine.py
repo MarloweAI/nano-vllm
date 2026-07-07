@@ -371,6 +371,13 @@ class DESEngine:
             ),
         ]
         result = simulate_discrete_pipeline(stages, microbatch_sizes)
+        # afd_decode_stages_ms prices ONE transformer layer; a decode step runs all
+        # num_layers layers back-to-back (no cross-layer overlap in this model), so
+        # scale the single-layer pipeline by the layer count to get the per-TOKEN
+        # step time. Without this the DES emitted a token after one layer, making AFD
+        # TBT ~num_layers too low. (Colocated's colocated_decode_ms already returns
+        # the full all-layers per-token step, which validated against the analytical.)
+        layers = int(self.timing.num_layers)
         start = max(
             ready_ms,
             max(
@@ -386,10 +393,10 @@ class DESEngine:
         for pipeline_event in result.events:
             resource_pool = self._resource_pool_for_stage(pipeline_event.stage)
             resource_id = pipeline_event.resource_id % len(resource_pool.available_ms)
-            event_start = start + pipeline_event.start_ms
-            event_end = start + pipeline_event.end_ms
+            event_start = start + pipeline_event.start_ms * layers
+            event_end = start + pipeline_event.end_ms * layers
             resource_pool.available_ms[resource_id] = max(resource_pool.available_ms[resource_id], event_end)
-            resource_pool.busy_ms[resource_id] += pipeline_event.end_ms - pipeline_event.start_ms
+            resource_pool.busy_ms[resource_id] += (pipeline_event.end_ms - pipeline_event.start_ms) * layers
             self._emit_resource(
                 state,
                 pipeline_event.stage,
@@ -399,12 +406,13 @@ class DESEngine:
                 batch_ready_ms,
                 notes=(
                     "des_batch_decode;"
+                    f"layers={layers};"
                     f"microbatch={pipeline_event.microbatch_id};"
                     f"microbatch_size={pipeline_event.microbatch_size}"
                 ),
                 batch_size=batch_size,
             )
-        return start, start + result.total_ms
+        return start, start + result.total_ms * layers
 
     def _resource_pool_for_stage(self, stage: str) -> ResourcePool:
         if stage == "decode_attention":
