@@ -8,13 +8,16 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from nanovllm.mock.timing.ac_model import cs4_offload as CS4M
-from nanovllm.mock.timing.gptoss_roofline import (
-    HELIOS,
-    GPTOSS,
+from analytical_backend.gpu import get_gpu_spec
+from analytical_backend.models import load_model
+from nanovllm.mock.timing.analytical import (
     gpu_only_point,
     hybrid_point,
     pareto_uplr,
 )
+
+HELIOS = get_gpu_spec("helios")
+MODEL = load_model("openai/gpt-oss-120b")
 
 
 DEFAULT_RAWDATA = ROOT / "tests/mock_backend/fixtures/perf_model_rawdata.txt"
@@ -75,11 +78,11 @@ def with_link_us(link_us: float, fn):
 
 def compute_raw_point(case: dict, isl: int, backend: str):
     if case["kind"] == "gpu_only":
-        point = gpu_only_point(HELIOS, GPTOSS, isl=isl, backend=backend, **case["kwargs"])
+        point = gpu_only_point(HELIOS, MODEL, isl=isl, backend=backend, **case["kwargs"])
     else:
         point = with_link_us(
             case["link_us"],
-            lambda: hybrid_point(HELIOS, GPTOSS, isl=isl, backend=backend, **case["kwargs"]),
+            lambda: hybrid_point(HELIOS, MODEL, isl=isl, backend=backend, **case["kwargs"]),
         )
     return point["x"], point["y"]
 
@@ -105,7 +108,7 @@ def validate_points(args) -> list[dict]:
 
 def sweep_gpu_only(isl: int, backend: str):
     return [
-        gpu_only_point(HELIOS, GPTOSS, B=B, isl=isl, tp_g=tp_g, backend=backend)
+        gpu_only_point(HELIOS, MODEL, B=B, isl=isl, tp_g=tp_g, backend=backend)
         for tp_g in P_GRID
         for B in B_GRID
     ]
@@ -120,7 +123,7 @@ def sweep_hybrid(isl: int, link_us: float, backend: str):
                     continue
                 for gb in GB_GRID:
                     for ck in CK_SET:
-                        point = hybrid_point(HELIOS, GPTOSS, gb, isl, tp_g, a_g, ck, backend=backend)
+                        point = hybrid_point(HELIOS, MODEL, gb, isl, tp_g, a_g, ck, backend=backend)
                         if point:
                             points.append(point)
         return points
@@ -210,7 +213,7 @@ def write_svg(path: Path, rows: list[dict]):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Validate the GPT-OSS roofline timing backend against rawdata.")
+    parser = argparse.ArgumentParser(description="Validate the shared analytical timing backend against GPT-OSS rawdata.")
     parser.add_argument("--isl", type=int, default=8192)
     parser.add_argument("--gpu-backend", choices=["measured", "roofline"], default="measured")
     parser.add_argument("--tolerance", type=float, default=0.005)

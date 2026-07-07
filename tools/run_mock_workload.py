@@ -1,6 +1,7 @@
 import argparse
 import csv
 import math
+import os
 import random
 import sys
 from dataclasses import dataclass
@@ -132,12 +133,14 @@ def run_workload(args):
     request_metrics, summary = compute_metrics(rows)
     write_request_metrics(metrics_path, request_metrics)
     write_summary_csv(output_dir / "mock_summary.csv", summary)
-    write_plots(output_dir, rows, request_metrics)
+    if os.environ.get("NANO_SKIP_MOCK_PLOTS", "0") != "1":
+        write_plots(output_dir, rows, request_metrics)
 
     print(f"wrote workload: {workload_path}")
     print(f"wrote trace: {trace_path}")
     print(f"wrote metrics: {metrics_path}")
-    print(f"wrote plots: {output_dir}")
+    if os.environ.get("NANO_SKIP_MOCK_PLOTS", "0") != "1":
+        print(f"wrote plots: {output_dir}")
     print(f"requests: {len(outputs)} tokens: {sum(len(tokens) for tokens in outputs.values())}")
 
 
@@ -241,7 +244,7 @@ def write_svg(path: Path, title: str, x_label: str, y_label: str, body: str, wid
 
 def main():
     parser = argparse.ArgumentParser(description="Generate and run a synthetic mock serving workload.")
-    parser.add_argument("--mode", choices=["colocated", "afd"], default="colocated")
+    parser.add_argument("--mode", choices=["colocated", "afd", "pdd"], default="colocated")
     parser.add_argument("--mock-runner", choices=["fake", "des"], default="fake")
     parser.add_argument("--num-requests", type=int, default=16)
     parser.add_argument("--arrival-process", choices=["poisson", "burst"], default="burst")

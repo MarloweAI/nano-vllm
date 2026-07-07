@@ -27,8 +27,8 @@ It includes:
 - **DES timing paths**: a standalone discrete-event harness plus an
   in-engine `mock_runner="des"` runner that replays each nano-vLLM scheduled
   decode batch through DES resource timing.
-- **Timing backends**: simple parametric timing plus a GPT-OSS roofline adapter
-  derived from the [original analytical model](docs/perf_model.pdf).
+- **Timing backends**: simple parametric timing plus a shared analytical
+  roofline adapter backed by the top-level `analytical_backend` package.
 - **Metrics and workload tools**: trace metrics, synthetic workload generation,
   and SVG/CSV result artifacts.
 - **Validation plots**: reproduced 8K and 1M ISL analytical / nano-vLLM mock /
@@ -152,7 +152,9 @@ DES-backed nano-vLLM decode runner:
 python tools/run_mock_trace.py \
   --mock-mode afd \
   --mock-runner des \
-  --timing-backend gptoss_roofline \
+  --timing-backend analytical \
+  --analytical-model openai/gpt-oss-120b \
+  --analytical-hardware b200 \
   --trace-output traces/mock_afd_des_trace.csv \
   --num-requests 16 \
   --isl 8192 \
@@ -210,25 +212,54 @@ python tools/run_mock_workload.py \
 Workload outputs include trace CSV, metrics CSV, summary CSV, and SVG plots for
 TTFT, TBT, throughput, KV usage, and batch size.
 
-### GPT-OSS Timing Backend
+### Analytical Timing Backend
 
 The default timing backend is `parametric`, which preserves the original mock
-latency formulas. For GPT-OSS-120B decode studies, use
-`--timing-backend gptoss_roofline`. It maps the
-[original analytical model](docs/perf_model.pdf) decode equations onto the
+latency formulas. For shared model/hardware roofline studies, use
+`--timing-backend analytical`. It loads model, GPU, and interconnect specs from
+the top-level `analytical_backend` package, then maps those timings onto the
 same mock stages: GPU-only decode for colocated mode, and GPU attention /
-GPU↔CS link / CS rest for AFD mode. Prefill remains parametric.
+GPU↔CS link / CS rest for AFD mode.
+When `--analytical-interconnect` is set, colocated TP>1 runs also charge
+tensor-parallel all-reduce through the shared `analytical_backend.comm` model.
+Use `--analytical-collective-overhead-us` to run an alternate comm-floor
+scenario, such as the 6 us tuned MI455X collective floor used in comparison
+reports.
+
+The analytical backend exposes the same calibration knobs Frontier uses for its
+InferenceX analytical path: `--analytical-overlap-comm`,
+`--analytical-launch-overhead-us`, `--analytical-decode-launch-overhead-us`,
+`--analytical-graph-launch-overhead-us`, utilization overrides,
+`--analytical-tp-sharding-beta`, and the prefill eager-overhead controls. The
+default nano path stays ideal unless those flags are supplied.
 
 ```bash
 python tools/run_mock_trace.py \
   --mock-mode afd \
-  --timing-backend gptoss_roofline \
+  --timing-backend analytical \
+  --analytical-model openai/gpt-oss-120b \
+  --analytical-hardware b200 \
   --isl 8192 \
   --osl 8 \
   --trace-output traces/gptoss_afd_trace.csv
 
 python tools/validate_roofline_backend.py \
   --output-dir results/roofline_validation
+
+python tools/run_mock_workload.py \
+  --mode colocated \
+  --mock-runner des \
+  --timing-backend analytical \
+  --analytical-model openai/gpt-oss-120b \
+  --analytical-hardware mi455x \
+  --analytical-interconnect mi455x_helios \
+  --analytical-collective-overhead-us 6 \
+  --tp-g 4 \
+  --fixed-isl 1024 \
+  --fixed-osl 1024 \
+  --num-requests 24 \
+  --max-num-seqs 8 \
+  --output-dir results/mi455x_tuned_comm
 ```
 
 ### DES Harness And nano-vLLM-DES Runner
@@ -272,7 +303,9 @@ python tools/run_des_workload.py \
   --mode colocated \
   --des-batch-decode \
   --des-max-batch-size 256 \
-  --timing-backend gptoss_roofline \
+  --timing-backend analytical \
+  --analytical-model openai/gpt-oss-120b \
+  --analytical-hardware b200 \
   --fixed-isl 8192 \
   --fixed-osl 8 \
   --num-requests 256 \

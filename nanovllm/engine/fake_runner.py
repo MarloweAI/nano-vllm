@@ -46,6 +46,13 @@ class FakeColocatedRunner:
         if is_prefill:
             isl = max(seq.num_scheduled_tokens for seq in seqs)
             self.last_latency_ms = self.timing.prefill_ms(batch_size, isl)
+            if self.config.mock_mode == "pdd":
+                # PDD: the per-request KV hop to the decode cluster, charged
+                # once at prefill completion (lanes transfer concurrently; the
+                # longest request bounds the batch).
+                self.last_latency_ms += max(
+                    self.timing.kv_transfer_ms(len(seq)) for seq in seqs
+                )
         else:
             context_len = max(len(seq) for seq in seqs)
             self.last_latency_ms = self.timing.colocated_decode_ms(batch_size, context_len)
@@ -242,7 +249,42 @@ class FakeDESRunner(FakeColocatedRunner):
             mock_kv_capacity_tokens=self.config.num_kvcache_blocks * self.config.kvcache_block_size,
             mock_token_base=self.config.mock_token_base,
             timing_backend=self.config.timing_backend,
-            roofline_gpu_arch=self.config.roofline_gpu_arch,
+            analytical_profile=self.config.analytical_profile,
+            analytical_model=self.config.analytical_model,
+            analytical_hardware=self.config.analytical_hardware,
+            analytical_interconnect=self.config.analytical_interconnect,
+            analytical_collective_overhead_us=self.config.analytical_collective_overhead_us,
+            analytical_send_recv_overhead_us=self.config.analytical_send_recv_overhead_us,
+            analytical_bandwidth_efficiency=self.config.analytical_bandwidth_efficiency,
+            analytical_overlap_comm=self.config.analytical_overlap_comm,
+            analytical_launch_overhead_us=self.config.analytical_launch_overhead_us,
+            analytical_decode_launch_overhead_us=self.config.analytical_decode_launch_overhead_us,
+            analytical_graph_launch_overhead_us=self.config.analytical_graph_launch_overhead_us,
+            analytical_utilization=self.config.analytical_utilization,
+            analytical_hbm_utilization=self.config.analytical_hbm_utilization,
+            analytical_flop_utilization=self.config.analytical_flop_utilization,
+            analytical_attn_hbm_utilization=self.config.analytical_attn_hbm_utilization,
+            analytical_attn_flop_utilization=self.config.analytical_attn_flop_utilization,
+            analytical_prefill_attn_hbm_utilization=self.config.analytical_prefill_attn_hbm_utilization,
+            analytical_moe_grouped_gemm_efficiency=self.config.analytical_moe_grouped_gemm_efficiency,
+            analytical_attn_proj_eager_overhead_us=self.config.analytical_attn_proj_eager_overhead_us,
+            analytical_moe_grouped_gemm_eager_overhead_us=(
+                self.config.analytical_moe_grouped_gemm_eager_overhead_us
+            ),
+            analytical_per_layer_overhead_us=self.config.analytical_per_layer_overhead_us,
+            analytical_prefill_per_layer_overhead_us=self.config.analytical_prefill_per_layer_overhead_us,
+            analytical_kernel_floor_multiplier=self.config.analytical_kernel_floor_multiplier,
+            analytical_tp_sharding_beta=self.config.analytical_tp_sharding_beta,
+            afd_ffn_backend=self.config.afd_ffn_backend,
+            afd_ffn_hardware=self.config.afd_ffn_hardware,
+            afd_ffn_tp=self.config.afd_ffn_tp,
+            afd_ffn_ep=self.config.afd_ffn_ep,
+            afd_ffn_wafers=getattr(self.config, "afd_ffn_wafers", 2),
+            afd_ffn_cs_arch=getattr(self.config, "afd_ffn_cs_arch", "CS3"),
+            pdd_prefill_replicas=self.config.pdd_prefill_replicas,
+            pdd_kv_link_gbps=self.config.pdd_kv_link_gbps,
+            pdd_kv_link_latency_ms=self.config.pdd_kv_link_latency_ms,
+            pdd_kv_link_lanes=self.config.pdd_kv_link_lanes,
             roofline_gpu_backend=self.config.roofline_gpu_backend,
             roofline_tp_g=self.config.roofline_tp_g,
             attention_groups=self.config.attention_groups,
@@ -250,6 +292,7 @@ class FakeDESRunner(FakeColocatedRunner):
             gpu_cs_link_us=self.config.gpu_cs_link_us,
             des_batch_decode=True,
             des_max_batch_size=len(seqs),
+            des_skip_initial_prefill=True,
         )
         engine = DESEngine(config)
         for idx, seq in enumerate(seqs):

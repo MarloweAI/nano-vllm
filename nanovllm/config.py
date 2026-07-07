@@ -43,8 +43,41 @@ class Config:
     cs_rest_resources: int = 1
     cs_to_gpu_link_resources: int = 1
     timing_backend: str = "parametric"
-    roofline_gpu_arch: str = "helios"
-    roofline_gpu_backend: str = "measured"
+    analytical_profile: str = ""
+    analytical_model: str = "openai/gpt-oss-120b"
+    analytical_hardware: str = "helios"
+    analytical_interconnect: str = ""
+    analytical_collective_overhead_us: float | None = None
+    analytical_send_recv_overhead_us: float | None = None
+    analytical_bandwidth_efficiency: float | None = None
+    analytical_overlap_comm: bool | None = None
+    analytical_launch_overhead_us: float | None = None
+    analytical_decode_launch_overhead_us: float | None = None
+    analytical_graph_launch_overhead_us: float | None = None
+    analytical_utilization: float | None = None
+    analytical_hbm_utilization: float | None = None
+    analytical_flop_utilization: float | None = None
+    analytical_attn_hbm_utilization: float | None = None
+    analytical_attn_flop_utilization: float | None = None
+    analytical_prefill_attn_hbm_utilization: float | None = None
+    analytical_moe_grouped_gemm_efficiency: float | None = None
+    analytical_attn_proj_eager_overhead_us: float | None = None
+    analytical_moe_grouped_gemm_eager_overhead_us: float | None = None
+    analytical_per_layer_overhead_us: float | None = None
+    analytical_prefill_per_layer_overhead_us: float | None = None
+    analytical_kernel_floor_multiplier: float | None = None
+    analytical_tp_sharding_beta: float | None = None
+    afd_ffn_backend: str = "cs4-measured"  # cs4-measured (Cerebras submodule) | gpu
+    afd_ffn_hardware: str = ""
+    afd_ffn_tp: int = 1
+    afd_ffn_ep: int = 1
+    afd_ffn_wafers: int = 2       # cs4-measured: CS wafers holding the experts (EP unit)
+    afd_ffn_cs_arch: str = "CS3"  # cs4-measured: measured-data arch (CS3 today; CS4/CS5 when landed)
+    pdd_prefill_replicas: int = 1
+    pdd_kv_link_gbps: float = 100.0
+    pdd_kv_link_latency_ms: float = 0.1
+    pdd_kv_link_lanes: int = 1
+    roofline_gpu_backend: str = "roofline"
     roofline_tp_g: int = 1
     attention_groups: int = 1
     chunk_batch: int = 1
@@ -56,7 +89,7 @@ class Config:
                 self.kvcache_block_size = self.mock_block_size
             assert self.kvcache_block_size > 0
             assert 1 <= self.tensor_parallel_size <= 8
-            assert self.mock_mode in ("colocated", "afd")
+            assert self.mock_mode in ("colocated", "afd", "pdd")
             assert self.mock_runner in ("fake", "des")
             assert self.pipeline_mode in ("sequential", "ideal_pipeline", "discrete_pipeline")
             assert self.num_layers > 0
@@ -65,13 +98,34 @@ class Config:
             assert self.gpu_to_cs_link_resources > 0
             assert self.cs_rest_resources > 0
             assert self.cs_to_gpu_link_resources > 0
-            assert self.timing_backend in ("parametric", "gptoss_roofline")
-            assert self.roofline_gpu_arch in ("helios", "rubin", "b200")
+            assert self.timing_backend in ("parametric", "analytical")
             assert self.roofline_gpu_backend in ("measured", "roofline")
             assert self.roofline_tp_g > 0
             assert self.attention_groups > 0
             assert self.chunk_batch > 0
             assert self.gpu_cs_link_us >= 0
+            for value in (
+                self.analytical_collective_overhead_us,
+                self.analytical_send_recv_overhead_us,
+                self.analytical_launch_overhead_us,
+                self.analytical_decode_launch_overhead_us,
+                self.analytical_graph_launch_overhead_us,
+                self.analytical_utilization,
+                self.analytical_hbm_utilization,
+                self.analytical_flop_utilization,
+                self.analytical_attn_hbm_utilization,
+                self.analytical_attn_flop_utilization,
+                self.analytical_prefill_attn_hbm_utilization,
+                self.analytical_moe_grouped_gemm_efficiency,
+                self.analytical_attn_proj_eager_overhead_us,
+                self.analytical_moe_grouped_gemm_eager_overhead_us,
+                self.analytical_per_layer_overhead_us,
+                self.analytical_prefill_per_layer_overhead_us,
+                self.analytical_kernel_floor_multiplier,
+            ):
+                assert value is None or value >= 0
+            assert self.analytical_bandwidth_efficiency is None or self.analytical_bandwidth_efficiency > 0
+            assert self.analytical_tp_sharding_beta is None or self.analytical_tp_sharding_beta > 0
             if self.mock_kv_capacity_tokens is not None:
                 self.num_kvcache_blocks = max(1, ceil(self.mock_kv_capacity_tokens / self.kvcache_block_size))
             elif self.num_kvcache_blocks == -1:

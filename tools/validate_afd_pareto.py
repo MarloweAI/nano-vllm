@@ -14,7 +14,7 @@ from nanovllm.engine.sequence import Sequence
 from nanovllm.mock import DESConfig, DESEngine, DESRequest
 from nanovllm.mock.global_pipeline import simulate_global_afd_batches
 from tools.validate_roofline_backend import frontier_rows, sweep_gpu_only
-from nanovllm.mock.timing.gptoss_roofline import pareto_uplr
+from nanovllm.mock.timing.analytical import pareto_uplr
 
 
 NUM_LAYERS = 36
@@ -454,7 +454,7 @@ def run_nanovllm_des_colocated_point(point: dict, args) -> tuple[float, float, f
         mock_block_size=isl + 2,
         prefill_base_ms=0.0,
         prefill_ms_per_token=0.0,
-        timing_backend="gptoss_roofline",
+        timing_backend="analytical",
         roofline_gpu_backend=args.gpu_backend,
         roofline_tp_g=tp_g,
     )
@@ -487,7 +487,7 @@ def run_des_colocated_point(point: dict, args) -> tuple[float, float, float]:
         mode="colocated",
         prefill_base_ms=0.0,
         prefill_ms_per_token=0.0,
-        timing_backend="gptoss_roofline",
+        timing_backend="analytical",
         roofline_gpu_backend=args.gpu_backend,
         roofline_tp_g=tp_g,
         des_batch_decode=True,
@@ -613,7 +613,7 @@ def run_mock_point(point: dict, args) -> tuple[float, float, float]:
         gpu_to_cs_link_resources=1,
         cs_rest_resources=1,
         cs_to_gpu_link_resources=1,
-        timing_backend="gptoss_roofline",
+        timing_backend="analytical",
         roofline_gpu_backend=args.gpu_backend,
         roofline_tp_g=int(point["tp_g"]),
         gpu_cs_link_us=float(point["link_us"]),
@@ -657,7 +657,7 @@ def run_nanovllm_des_point(point: dict, args) -> tuple[float, float, float]:
         gpu_to_cs_link_resources=1,
         cs_rest_resources=1,
         cs_to_gpu_link_resources=1,
-        timing_backend="gptoss_roofline",
+        timing_backend="analytical",
         roofline_gpu_backend=args.gpu_backend,
         roofline_tp_g=int(point["tp_g"]),
         gpu_cs_link_us=float(point["link_us"]),
@@ -684,7 +684,7 @@ def run_des_point(point: dict, args) -> tuple[float, float, float]:
         gpu_to_cs_link_resources=1,
         cs_rest_resources=1,
         cs_to_gpu_link_resources=1,
-        timing_backend="gptoss_roofline",
+        timing_backend="analytical",
         roofline_gpu_backend=args.gpu_backend,
         roofline_tp_g=int(point["tp_g"]),
         gpu_cs_link_us=float(point["link_us"]),
@@ -711,7 +711,7 @@ def run_global_des_point(point: dict, args) -> tuple[float, float, float]:
         gpu_to_cs_link_resources=1,
         cs_rest_resources=1,
         cs_to_gpu_link_resources=1,
-        timing_backend="gptoss_roofline",
+        timing_backend="analytical",
         roofline_gpu_backend=args.gpu_backend,
         roofline_tp_g=tp_g,
         gpu_cs_link_us=float(point["link_us"]),

@@ -68,28 +68,83 @@ class DESConfig:
     trace_output: str | None = None
     mock_token_base: int = 1000
     timing_backend: str = "parametric"
-    roofline_gpu_arch: str = "helios"
-    roofline_gpu_backend: str = "measured"
+    analytical_profile: str = ""
+    analytical_model: str = "openai/gpt-oss-120b"
+    analytical_hardware: str = "helios"
+    analytical_interconnect: str = ""
+    analytical_collective_overhead_us: float | None = None
+    analytical_send_recv_overhead_us: float | None = None
+    analytical_bandwidth_efficiency: float | None = None
+    analytical_overlap_comm: bool | None = None
+    analytical_launch_overhead_us: float | None = None
+    analytical_decode_launch_overhead_us: float | None = None
+    analytical_graph_launch_overhead_us: float | None = None
+    analytical_utilization: float | None = None
+    analytical_hbm_utilization: float | None = None
+    analytical_flop_utilization: float | None = None
+    analytical_attn_hbm_utilization: float | None = None
+    analytical_attn_flop_utilization: float | None = None
+    analytical_prefill_attn_hbm_utilization: float | None = None
+    analytical_moe_grouped_gemm_efficiency: float | None = None
+    analytical_attn_proj_eager_overhead_us: float | None = None
+    analytical_moe_grouped_gemm_eager_overhead_us: float | None = None
+    analytical_per_layer_overhead_us: float | None = None
+    analytical_prefill_per_layer_overhead_us: float | None = None
+    analytical_kernel_floor_multiplier: float | None = None
+    analytical_tp_sharding_beta: float | None = None
+    afd_ffn_backend: str = "cs4-measured"
+    afd_ffn_hardware: str = ""
+    afd_ffn_tp: int = 1
+    afd_ffn_ep: int = 1
+    afd_ffn_wafers: int = 2
+    afd_ffn_cs_arch: str = "CS3"
+    pdd_prefill_replicas: int = 1
+    pdd_kv_link_gbps: float = 100.0
+    pdd_kv_link_latency_ms: float = 0.1
+    pdd_kv_link_lanes: int = 1
+    roofline_gpu_backend: str = "roofline"
     roofline_tp_g: int = 1
     attention_groups: int = 1
     chunk_batch: int = 1
     gpu_cs_link_us: float = 12.0
     des_batch_decode: bool = False
     des_max_batch_size: int = 512
+    des_skip_initial_prefill: bool = False
 
     def __post_init__(self):
-        assert self.mode in ("colocated", "afd")
+        assert self.mode in ("colocated", "afd", "pdd")
         assert self.attention_replicas > 0
         assert self.gpu_to_cs_link_resources > 0
         assert self.cs_rest_resources > 0
         assert self.cs_to_gpu_link_resources > 0
         assert self.mock_block_size > 0
         assert self.mock_kv_capacity_tokens > 0
-        assert self.timing_backend in ("parametric", "gptoss_roofline")
-        assert self.roofline_gpu_arch in ("helios", "rubin", "b200")
+        assert self.timing_backend in ("parametric", "analytical")
         assert self.roofline_gpu_backend in ("measured", "roofline")
         assert self.roofline_tp_g > 0
         assert self.gpu_cs_link_us >= 0
+        for value in (
+            self.analytical_collective_overhead_us,
+            self.analytical_send_recv_overhead_us,
+            self.analytical_launch_overhead_us,
+            self.analytical_decode_launch_overhead_us,
+            self.analytical_graph_launch_overhead_us,
+            self.analytical_utilization,
+            self.analytical_hbm_utilization,
+            self.analytical_flop_utilization,
+            self.analytical_attn_hbm_utilization,
+            self.analytical_attn_flop_utilization,
+            self.analytical_prefill_attn_hbm_utilization,
+            self.analytical_moe_grouped_gemm_efficiency,
+            self.analytical_attn_proj_eager_overhead_us,
+            self.analytical_moe_grouped_gemm_eager_overhead_us,
+            self.analytical_per_layer_overhead_us,
+            self.analytical_prefill_per_layer_overhead_us,
+            self.analytical_kernel_floor_multiplier,
+        ):
+            assert value is None or value >= 0
+        assert self.analytical_bandwidth_efficiency is None or self.analytical_bandwidth_efficiency > 0
+        assert self.analytical_tp_sharding_beta is None or self.analytical_tp_sharding_beta > 0
         assert self.des_max_batch_size > 0
 
 
@@ -157,7 +212,9 @@ class DESEngine:
         self.cs_rest = ResourcePool("cs_rest", config.cs_rest_resources)
         self.cs_to_gpu = ResourcePool("cs_to_gpu_link", config.cs_to_gpu_link_resources)
         self.colocated_decode = ResourcePool("decode", 1)
-        self.prefill = ResourcePool("prefill", 1)
+        prefill_replicas = config.pdd_prefill_replicas if config.mode == "pdd" else 1
+        self.prefill = ResourcePool("prefill", prefill_replicas)
+        self.kv_link = ResourcePool("pdd_kv_link", config.pdd_kv_link_lanes)
         self.used_kv_blocks = 0
         self.timing = build_timing_backend(config)
         self.decode_ready: list[tuple[int, float]] = []
@@ -186,6 +243,9 @@ class DESEngine:
         state.kv_tokens = state.spec.isl
         self._refresh_kv_blocks()
         self._emit(state, "request_arrival", event.time_ms, notes="des_arrival")
+        if self.config.des_skip_initial_prefill:
+            self._push(event.time_ms, "prefill_done", event.request_id)
+            return
         duration = self.timing.prefill_ms(1, state.spec.isl)
         resource_id, start, end = self.prefill.reserve(event.time_ms, duration)
         self._emit_resource(state, "prefill", start, end, resource_id, event.time_ms)
@@ -194,6 +254,22 @@ class DESEngine:
     def _handle_prefill_done(self, event: Event):
         state = self._state(event.request_id)
         self._emit(state, "prefill_end", event.time_ms)
+        if self.config.mode == "pdd" and not self.config.des_skip_initial_prefill:
+            # PDD: the request's KV moves prefill cluster -> decode cluster
+            # ONCE, over the scale-out link, before any decode token. Guarded
+            # off in per-step delegation (des_skip_initial_prefill: the
+            # FakeDESRunner builds a fresh engine per decode round, so a
+            # request-lifecycle cost here would wrongly repeat per token;
+            # the runner charges the hop once at prefill instead).
+            duration = self.timing.kv_transfer_ms(state.spec.isl)
+            resource_id, start, end = self.kv_link.reserve(event.time_ms, duration)
+            self._emit_resource(state, "pdd_kv_transfer", start, end, resource_id, event.time_ms)
+            self._push(end, "kv_transfer_done", event.request_id)
+            return
+        self._schedule_decode_token(state, event.time_ms)
+
+    def _handle_kv_transfer_done(self, event: Event):
+        state = self._state(event.request_id)
         self._schedule_decode_token(state, event.time_ms)
 
     def _schedule_decode_token(self, state: RequestState, ready_ms: float):
@@ -201,7 +277,7 @@ class DESEngine:
             self._mark_decode_ready(state, ready_ms)
             return
 
-        if self.config.mode == "colocated":
+        if self.config.mode in ("colocated", "pdd"):
             duration = self.timing.colocated_decode_ms(1, state.spec.isl + state.generated_tokens)
             resource_id, start, end = self.colocated_decode.reserve(ready_ms, duration)
             self._emit_resource(state, "decode", start, end, resource_id, ready_ms)
@@ -240,7 +316,7 @@ class DESEngine:
         self.decode_ready = ready[self.config.des_max_batch_size:] + future
         states = [self._state(request_id) for request_id, _ in batch]
         context_len = max(state.spec.isl + state.generated_tokens for state in states)
-        if self.config.mode == "colocated":
+        if self.config.mode in ("colocated", "pdd"):
             duration = self.timing.colocated_decode_ms(len(states), context_len)
             resource_id, start, end = self.colocated_decode.reserve(event.time_ms, duration)
             for state, (_, ready_ms) in zip(states, batch):
@@ -295,6 +371,13 @@ class DESEngine:
             ),
         ]
         result = simulate_discrete_pipeline(stages, microbatch_sizes)
+        # afd_decode_stages_ms prices ONE transformer layer; a decode step runs all
+        # num_layers layers back-to-back (no cross-layer overlap in this model), so
+        # scale the single-layer pipeline by the layer count to get the per-TOKEN
+        # step time. Without this the DES emitted a token after one layer, making AFD
+        # TBT ~num_layers too low. (Colocated's colocated_decode_ms already returns
+        # the full all-layers per-token step, which validated against the analytical.)
+        layers = int(self.timing.num_layers)
         start = max(
             ready_ms,
             max(
@@ -310,10 +393,10 @@ class DESEngine:
         for pipeline_event in result.events:
             resource_pool = self._resource_pool_for_stage(pipeline_event.stage)
             resource_id = pipeline_event.resource_id % len(resource_pool.available_ms)
-            event_start = start + pipeline_event.start_ms
-            event_end = start + pipeline_event.end_ms
+            event_start = start + pipeline_event.start_ms * layers
+            event_end = start + pipeline_event.end_ms * layers
             resource_pool.available_ms[resource_id] = max(resource_pool.available_ms[resource_id], event_end)
-            resource_pool.busy_ms[resource_id] += pipeline_event.end_ms - pipeline_event.start_ms
+            resource_pool.busy_ms[resource_id] += (pipeline_event.end_ms - pipeline_event.start_ms) * layers
             self._emit_resource(
                 state,
                 pipeline_event.stage,
@@ -323,12 +406,13 @@ class DESEngine:
                 batch_ready_ms,
                 notes=(
                     "des_batch_decode;"
+                    f"layers={layers};"
                     f"microbatch={pipeline_event.microbatch_id};"
                     f"microbatch_size={pipeline_event.microbatch_size}"
                 ),
                 batch_size=batch_size,
             )
-        return start, start + result.total_ms
+        return start, start + result.total_ms * layers
 
     def _resource_pool_for_stage(self, stage: str) -> ResourcePool:
         if stage == "decode_attention":
