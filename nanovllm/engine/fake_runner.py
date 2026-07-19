@@ -265,7 +265,6 @@ class FakeDESRunner(FakeColocatedRunner):
             analytical_flop_utilization=self.config.analytical_flop_utilization,
             analytical_attn_hbm_utilization=self.config.analytical_attn_hbm_utilization,
             analytical_attn_flop_utilization=self.config.analytical_attn_flop_utilization,
-            analytical_prefill_attn_hbm_utilization=self.config.analytical_prefill_attn_hbm_utilization,
             analytical_moe_grouped_gemm_efficiency=self.config.analytical_moe_grouped_gemm_efficiency,
             analytical_attn_proj_eager_overhead_us=self.config.analytical_attn_proj_eager_overhead_us,
             analytical_moe_grouped_gemm_eager_overhead_us=(

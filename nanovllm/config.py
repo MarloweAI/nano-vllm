@@ -59,7 +59,6 @@ class Config:
     analytical_flop_utilization: float | None = None
     analytical_attn_hbm_utilization: float | None = None
     analytical_attn_flop_utilization: float | None = None
-    analytical_prefill_attn_hbm_utilization: float | None = None
     analytical_moe_grouped_gemm_efficiency: float | None = None
     analytical_attn_proj_eager_overhead_us: float | None = None
     analytical_moe_grouped_gemm_eager_overhead_us: float | None = None
@@ -115,7 +114,6 @@ class Config:
                 self.analytical_flop_utilization,
                 self.analytical_attn_hbm_utilization,
                 self.analytical_attn_flop_utilization,
-                self.analytical_prefill_attn_hbm_utilization,
                 self.analytical_moe_grouped_gemm_efficiency,
                 self.analytical_attn_proj_eager_overhead_us,
                 self.analytical_moe_grouped_gemm_eager_overhead_us,

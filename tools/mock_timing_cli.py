@@ -28,7 +28,6 @@ def add_timing_backend_args(parser):
     parser.add_argument("--analytical-flop-utilization", type=float, default=None)
     parser.add_argument("--analytical-attn-hbm-utilization", type=float, default=None)
     parser.add_argument("--analytical-attn-flop-utilization", type=float, default=None)
-    parser.add_argument("--analytical-prefill-attn-hbm-utilization", type=float, default=None)
     parser.add_argument("--analytical-moe-grouped-gemm-efficiency", type=float, default=None)
     parser.add_argument("--analytical-attn-proj-eager-overhead-us", type=float, default=None)
     parser.add_argument("--analytical-moe-grouped-gemm-eager-overhead-us", type=float, default=None)
@@ -72,7 +71,6 @@ def timing_backend_kwargs(args):
         "analytical_flop_utilization": args.analytical_flop_utilization,
         "analytical_attn_hbm_utilization": args.analytical_attn_hbm_utilization,
         "analytical_attn_flop_utilization": args.analytical_attn_flop_utilization,
-        "analytical_prefill_attn_hbm_utilization": args.analytical_prefill_attn_hbm_utilization,
         "analytical_moe_grouped_gemm_efficiency": args.analytical_moe_grouped_gemm_efficiency,
         "analytical_attn_proj_eager_overhead_us": args.analytical_attn_proj_eager_overhead_us,
         "analytical_moe_grouped_gemm_eager_overhead_us": args.analytical_moe_grouped_gemm_eager_overhead_us,
