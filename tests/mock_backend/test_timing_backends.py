@@ -3,7 +3,7 @@ import pytest
 from nanovllm.config import Config
 from nanovllm.mock.timing import build_timing_backend
 from nanovllm.mock.timing.analytical import gpu_only_point
-from analytical_backend.gpu import get_gpu_spec
+from analytical_backend.devices.gpu import get_gpu_spec
 from analytical_backend.models import load_model
 
 HELIOS = get_gpu_spec("helios")
