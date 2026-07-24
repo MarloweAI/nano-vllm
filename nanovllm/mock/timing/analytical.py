@@ -9,7 +9,7 @@ from analytical_backend.disagg import (
     ScaleOutLinkSpec,
     kv_transfer_ms,
 )
-from analytical_backend.gpu import GpuSpec
+from analytical_backend.devices.gpu import GpuSpec
 from analytical_backend.pareto import (
     gpu_fmha_total as _shared_gpu_fmha_total,
     gpu_only_point as _shared_gpu_only_point,
