@@ -3,7 +3,7 @@ import pytest
 from nanovllm.config import Config
 from nanovllm.mock.timing import build_timing_backend
 from nanovllm.mock.timing.analytical import gpu_only_point
-from analytical_backend.gpu import get_gpu_spec
+from analytical_backend.devices.gpu import get_gpu_spec
 from analytical_backend.models import load_model
 
 HELIOS = get_gpu_spec("helios")
@@ -159,7 +159,9 @@ def test_analytical_backend_accepts_tuned_collective_floor_override():
         analytical_model="openai/gpt-oss-120b",
         analytical_hardware="mi455x",
         analytical_interconnect="mi455x_helios",
-        analytical_collective_overhead_us=6.0,
+        # Helios now defaults to 6 us/round. Use a genuinely lower override so
+        # this test continues to verify that the adapter forwards the knob.
+        analytical_collective_overhead_us=2.0,
         roofline_gpu_backend="roofline",
         roofline_tp_g=4,
     )
