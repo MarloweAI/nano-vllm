@@ -1,8 +1,10 @@
+from types import SimpleNamespace
+
 import pytest
 
 from nanovllm.config import Config
 from nanovllm.mock.timing import build_timing_backend
-from nanovllm.mock.timing.analytical import gpu_only_point
+from nanovllm.mock.timing.analytical import AnalyticalTimingBackend, gpu_only_point
 from analytical_backend.devices.gpu import get_gpu_spec
 from analytical_backend.models import load_model
 
@@ -22,6 +24,13 @@ def analytical_config(**overrides):
     }
     kwargs.update(overrides)
     return Config("__mock__", **kwargs)
+
+
+def test_analytical_backend_reads_layer_count_from_ordered_model_layers() -> None:
+    backend = object.__new__(AnalyticalTimingBackend)
+    backend.model = SimpleNamespace(layers=(object(), object(), object()))
+
+    assert backend.num_layers == 3
 
 
 def test_parametric_timing_backend_preserves_existing_formulas():

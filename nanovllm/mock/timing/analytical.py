@@ -134,7 +134,7 @@ class AnalyticalTimingBackend:
 
     @property
     def num_layers(self) -> int:
-        return int(self.model.L)
+        return len(self.model.layers)
 
     @property
     def backend(self) -> str:
