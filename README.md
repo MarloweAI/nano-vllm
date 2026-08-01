@@ -38,20 +38,6 @@ It includes:
 The original GPU inference path is still present; the mock/DES additions are
 for learning, validation, and performance-model exploration.
 
-### Shared-backend dependency
-
-The native GPU engine and default parametric mock timing remain local to
-nano-vLLM. Selecting `--timing-backend analytical` imports the umbrella
-simulator's `analytical_backend` package for model, GPU, collective, link, and
-AFD stage timing. nano-vLLM does not carry a private copy of those equations.
-
-For ordinary Cerebras AFD, nano-vLLM reaches the active
-`Cerebras/moe_decode_sim/perf` package through the shared
-`CerebrasMeasuredBackend`; it does not import Cerebras directly. The historical
-`cs4-measured` option name currently selects CS3 simulator-derived, MoE-only
-timing—not measured CS4 timing. Cerebras does not import nano-vLLM or
-`analytical_backend`.
-
 ## Key Features
 
 * 🚀 **Fast offline inference** - Comparable inference speeds to vLLM
@@ -127,22 +113,11 @@ Optional analysis packages:
 pip install pandas matplotlib rich
 ```
 
-For this fork's analytical timing mode, install from the umbrella checkout so
-the shared package and pinned submodules are available:
+Analytical timing also requires a compatible umbrella simulator checkout:
 
 ```bash
-git clone --recurse-submodules https://github.com/MarloweAI/simulator.git
-cd simulator
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e . -e "./nano-vllm[dev]"
-cd nano-vllm
-export PYTHONPATH="$PWD:$PWD/.."
+python -m pip install -e /path/to/simulator
 ```
-
-A standalone nano-vLLM checkout can run the native and parametric paths, but
-analytical mode additionally requires an installed compatible
-`marlowe-simulator` package.
 
 Run tests:
 

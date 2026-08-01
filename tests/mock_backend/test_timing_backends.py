@@ -157,6 +157,7 @@ def test_analytical_backend_accepts_tuned_collective_floor_override():
         analytical_model="openai/gpt-oss-120b",
         analytical_hardware="mi455x",
         analytical_interconnect="mi455x_helios",
+        analytical_collective_overhead_us=12.0,
         roofline_gpu_backend="roofline",
         roofline_tp_g=4,
     )
@@ -168,9 +169,7 @@ def test_analytical_backend_accepts_tuned_collective_floor_override():
         analytical_model="openai/gpt-oss-120b",
         analytical_hardware="mi455x",
         analytical_interconnect="mi455x_helios",
-        # Helios now defaults to 6 us/round. Use a genuinely lower override so
-        # this test continues to verify that the adapter forwards the knob.
-        analytical_collective_overhead_us=2.0,
+        analytical_collective_overhead_us=6.0,
         roofline_gpu_backend="roofline",
         roofline_tp_g=4,
     )
