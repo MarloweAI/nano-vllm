@@ -45,6 +45,7 @@ class Config:
     timing_backend: str = "parametric"
     analytical_profile: str = ""
     analytical_model: str = "openai/gpt-oss-120b"
+    analytical_kv_cache_bytes: float | None = None
     analytical_hardware: str = "helios"
     analytical_interconnect: str = ""
     analytical_collective_overhead_us: float | None = None

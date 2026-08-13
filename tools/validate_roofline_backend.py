@@ -8,7 +8,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from nanovllm.mock.timing.ac_model import cs4_offload as CS4M
-from analytical_backend.gpu import get_gpu_spec
+from analytical_backend.devices.gpu import get_gpu_spec
 from analytical_backend.models import load_model
 from nanovllm.mock.timing.analytical import (
     gpu_only_point,

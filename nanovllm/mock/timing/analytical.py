@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from nanovllm.mock.timing.backends import AFDStageDurations
 
 from analytical_backend.calibration import calibration_from_config
@@ -9,14 +11,14 @@ from analytical_backend.disagg import (
     ScaleOutLinkSpec,
     kv_transfer_ms,
 )
-from analytical_backend.gpu import GpuSpec
+from analytical_backend.devices.gpu import GpuSpec
 from analytical_backend.pareto import (
     gpu_fmha_total as _shared_gpu_fmha_total,
     gpu_only_point as _shared_gpu_only_point,
     pareto_uplr,
     tpot_seconds as _shared_tpot_seconds,
 )
-from analytical_backend.models import Model
+from analytical_backend.models import Model, load_model
 from analytical_backend.profiles import load_profile
 from analytical_backend.serving_model import AnalyticalServingModel
 
@@ -100,8 +102,15 @@ class AnalyticalTimingBackend:
         # knobs override profile values (None = not set).
         profile_name = getattr(config, "analytical_profile", "") or ""
         explicit_calibration = calibration_from_config(config, prefix="analytical_")
+        model = load_model(self.model_key)
+        kv_cache_bytes = getattr(config, "analytical_kv_cache_bytes", None)
+        if kv_cache_bytes is not None:
+            precision = {1.0: "fp8", 2.0: "bf16"}.get(float(kv_cache_bytes))
+            if precision is None:
+                raise ValueError("analytical_kv_cache_bytes must be 1.0 or 2.0")
+            model = replace(model, kv=precision)
         self._serving = AnalyticalServingModel(
-            self.model_key,
+            model,
             self.hardware_key,
             tp=config.roofline_tp_g,
             interconnect=self.interconnect_key,
@@ -110,7 +119,9 @@ class AnalyticalTimingBackend:
                 calibration_from_config(
                     config,
                     prefix="analytical_",
-                    base=load_profile(profile_name).calibration,
+                    base=load_profile(profile_name).calibration_for_device(
+                        self.hardware_key
+                    ),
                 )
                 if profile_name
                 else explicit_calibration

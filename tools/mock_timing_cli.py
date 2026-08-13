@@ -10,6 +10,7 @@ def add_timing_backend_args(parser):
         "explicit --analytical-* flags override profile values",
     )
     parser.add_argument("--analytical-model", default="openai/gpt-oss-120b")
+    parser.add_argument("--analytical-kv-cache-bytes", type=float, default=None)
     parser.add_argument("--analytical-hardware", default="helios")
     parser.add_argument("--analytical-interconnect", default="")
     parser.add_argument("--analytical-collective-overhead-us", type=float, default=None)
@@ -57,6 +58,7 @@ def timing_backend_kwargs(args):
         "timing_backend": args.timing_backend,
         "analytical_profile": args.analytical_profile,
         "analytical_model": args.analytical_model,
+        "analytical_kv_cache_bytes": args.analytical_kv_cache_bytes,
         "analytical_hardware": args.analytical_hardware,
         "analytical_interconnect": args.analytical_interconnect,
         "analytical_collective_overhead_us": args.analytical_collective_overhead_us,
