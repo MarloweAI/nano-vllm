@@ -4,7 +4,7 @@ import math
 import os
 import random
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,7 +33,7 @@ def fixed_or_lognormal(rng: random.Random, dist: str, fixed: int, mean: float, s
 
 
 def generate_arrivals(rng: random.Random, args) -> list[float]:
-    if args.arrival_process == "burst":
+    if args.arrival_process in {"burst", "closed_loop"}:
         return [0.0] * args.num_requests
 
     arrivals = []
@@ -78,8 +78,6 @@ def run_workload(args):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     workload = generate_workload(args)
-    write_workload_csv(workload_path, workload)
-
     max_model_len = max(args.max_model_len, max((req.isl + req.osl + 1 for req in workload), default=args.max_model_len))
     llm = LLM(
         "__mock__",
@@ -114,20 +112,49 @@ def run_workload(args):
     )
 
     pending = list(workload)
+    submitted = []
     outputs = {}
     next_prompt_token = 1
-    while pending or not llm.is_finished():
-        while pending and pending[0].arrival_ms <= llm.clock.time_ms:
+
+    def submit(req):
+        nonlocal next_prompt_token
+        actual = replace(req, arrival_ms=llm.clock.time_ms)
+        prompt = list(range(next_prompt_token, next_prompt_token + actual.isl))
+        next_prompt_token += actual.isl
+        llm.add_request(prompt, SamplingParams(max_tokens=actual.osl, ignore_eos=True))
+        submitted.append(actual)
+
+    if args.arrival_process == "closed_loop":
+        initial = min(args.closed_concurrency, len(pending))
+        for slot in range(initial):
             req = pending.pop(0)
-            prompt = list(range(next_prompt_token, next_prompt_token + req.isl))
-            next_prompt_token += req.isl
-            llm.add_request(prompt, SamplingParams(max_tokens=req.osl, ignore_eos=True))
+            if args.closed_loop_stagger:
+                # Seed a steady-state phase distribution. These warmup requests are
+                # excluded by the report collector; all replacements use the requested
+                # full OSL. Without this, identical fixed-length requests finish in
+                # lockstep and closed loop degenerates back into burst-drain waves.
+                req = replace(req, osl=max(1, (slot + 1) * req.osl // initial))
+            submit(req)
+
+    while pending or not llm.is_finished():
+        while (
+            args.arrival_process != "closed_loop"
+            and pending
+            and pending[0].arrival_ms <= llm.clock.time_ms
+        ):
+            req = pending.pop(0)
+            submit(req)
         if llm.is_finished():
             if pending:
                 llm.clock.time_ms = pending[0].arrival_ms
             continue
         step_outputs, _ = llm.step()
         outputs.update(step_outputs)
+        if args.arrival_process == "closed_loop":
+            for _ in range(min(len(step_outputs), len(pending))):
+                submit(pending.pop(0))
+
+    write_workload_csv(workload_path, submitted)
 
     rows = read_trace(trace_path)
     request_metrics, summary = compute_metrics(rows)
@@ -247,7 +274,13 @@ def main():
     parser.add_argument("--mode", choices=["colocated", "afd", "pdd"], default="colocated")
     parser.add_argument("--mock-runner", choices=["fake", "des"], default="fake")
     parser.add_argument("--num-requests", type=int, default=16)
-    parser.add_argument("--arrival-process", choices=["poisson", "burst"], default="burst")
+    parser.add_argument(
+        "--arrival-process",
+        choices=["poisson", "burst", "closed_loop"],
+        default="burst",
+    )
+    parser.add_argument("--closed-concurrency", type=int, default=1)
+    parser.add_argument("--closed-loop-stagger", action="store_true")
     parser.add_argument("--arrival-rate-per-s", type=float, default=10.0)
     parser.add_argument("--isl-dist", choices=["fixed", "lognormal"], default="fixed")
     parser.add_argument("--osl-dist", choices=["fixed", "lognormal"], default="fixed")
